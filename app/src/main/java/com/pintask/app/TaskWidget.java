@@ -11,6 +11,9 @@ import java.util.List;
 
 public final class TaskWidget extends AppWidgetProvider {
     @Override public void onUpdate(Context context, AppWidgetManager manager, int[] ids) { update(context, manager, ids); }
+    @Override public void onAppWidgetOptionsChanged(Context context,AppWidgetManager manager,int id,android.os.Bundle options) {
+        update(context,manager,new int[]{id});
+    }
     public static void refreshAll(Context context) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         int[] ids = manager.getAppWidgetIds(new ComponentName(context,TaskWidget.class));
@@ -20,14 +23,16 @@ public final class TaskWidget extends AppWidgetProvider {
         try (TaskStore store = new TaskStore(context)) {
             List<TaskStore.Task> tasks = store.activePersonal();
             for (int id : ids) {
+                int height=manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,320);
+                int visible=Math.max(1,Math.min(5,(height-136)/48));
                 RemoteViews view = new RemoteViews(context.getPackageName(),R.layout.task_widget);
                 view.setTextViewText(R.id.widget_title,"PinTask · " + tasks.size() + " tasks");
                 view.setOnClickPendingIntent(R.id.widget_title, PendingIntent.getActivity(context,0,new Intent(context,MainActivity.class),PendingIntent.FLAG_IMMUTABLE));
                 view.setOnClickPendingIntent(R.id.widget_add, PendingIntent.getActivity(context,0,new Intent(context,QuickAddActivity.class),PendingIntent.FLAG_IMMUTABLE));
                 view.removeAllViews(R.id.widget_tasks);
                 if (tasks.isEmpty()) view.setTextViewText(R.id.widget_empty,"All done. Add a task above.");
-                else view.setTextViewText(R.id.widget_empty,tasks.size() > 5 ? "Showing 5 · Tap PinTask for all tasks" : "Tap Done to complete a task");
-                for (int i=0;i<Math.min(5,tasks.size());i++) {
+                else view.setTextViewText(R.id.widget_empty,tasks.size() > visible ? "Showing "+visible+" · Tap PinTask for all tasks" : "Tap Done to complete a task");
+                for (int i=0;i<Math.min(visible,tasks.size());i++) {
                     TaskStore.Task task = tasks.get(i);
                     RemoteViews row = new RemoteViews(context.getPackageName(),R.layout.widget_task);
                     row.setTextViewText(R.id.widget_task_title,task.title);

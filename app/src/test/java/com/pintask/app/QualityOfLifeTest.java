@@ -137,4 +137,20 @@ public class QualityOfLifeTest {
         Notification notification=Shadows.shadowOf(context.getSystemService(NotificationManager.class)).getNotification((int)task.id);
         assertEquals("Snooze",notification.actions[1].title.toString());
     }
+
+    @Test public void versionFourDatabaseUpgradesWithoutLosingTasks() {
+        store.close(); shifts.close(); context.deleteDatabase("pintask.db");
+        android.database.sqlite.SQLiteDatabase old=context.openOrCreateDatabase("pintask.db",0,null);
+        old.execSQL("CREATE TABLE tasks (_id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,created_at INTEGER NOT NULL,"+
+                "done INTEGER NOT NULL DEFAULT 0,completed_at INTEGER NOT NULL DEFAULT 0,priority INTEGER NOT NULL DEFAULT 1,"+
+                "due_at INTEGER NOT NULL DEFAULT 0,recurrence INTEGER NOT NULL DEFAULT 0,reminded_at INTEGER NOT NULL DEFAULT 0,"+
+                "notify_before_min INTEGER NOT NULL DEFAULT -1,shift_run_id INTEGER NOT NULL DEFAULT 0,shift_label TEXT NOT NULL DEFAULT '')");
+        ShiftRepository.createTables(old);
+        long id=TaskStore.insert(old,"Keep existing task",System.currentTimeMillis(),1,0,0,-1,0,"");
+        old.setVersion(4); old.close();
+        store=new TaskStore(context); shifts=new ShiftRepository(context);
+        assertEquals("Keep existing task",store.find(id).title);
+        assertEquals(0,store.find(id).snoozedUntil); assertEquals(5,store.getReadableDatabase().getVersion());
+        assertTrue(store.saveFavorite(id)>0);
+    }
 }

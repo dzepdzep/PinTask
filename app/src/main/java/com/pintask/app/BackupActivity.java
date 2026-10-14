@@ -61,11 +61,12 @@ public final class BackupActivity extends Activity {
         new Thread(()->{
             try(TaskStore store=new TaskStore(this)) {
                 List<TaskStore.Task> old=store.active();
-                BackupData.restore(store,json);
+                try { BackupData.restore(store,json); }
+                catch(Exception e) { message("Restore failed; your previous data was kept. "+e.getMessage()); return; }
                 for(TaskStore.Task task:old) { ReminderScheduler.cancel(this,task.id); TaskNotifications.cancel(this,task.id); }
                 TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this); TaskWidget.refreshAll(this);
                 message("Backup restored");
-            } catch(Exception e) { message("Restore failed; your previous data was kept. "+e.getMessage()); }
+            } catch(Exception e) { message("Could not refresh reminders after restore. Reopen PinTask: "+e.getMessage()); }
         },"PinTask-restore").start();
     }
     private void message(String message) { runOnUiThread(()->{ if(!isFinishing() && !isDestroyed()) new AlertDialog.Builder(this).setMessage(message).setPositiveButton("OK",null).show(); }); }
