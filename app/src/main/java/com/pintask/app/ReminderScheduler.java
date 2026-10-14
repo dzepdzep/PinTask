@@ -17,7 +17,7 @@ public final class ReminderScheduler {
     }
 
     public static void schedule(Context context, TaskStore.Task task) {
-        if (task == null || task.done || task.dueAt <= 0 || task.remindedAt > 0) return;
+        if (task == null || task.done || (task.dueAt <= 0 && task.shiftRunId == 0) || task.remindedAt > 0) return;
         long notifyAt = task.notificationAt();
         if (notifyAt <= System.currentTimeMillis()) {
             deliver(context, task.id);
@@ -51,7 +51,7 @@ public final class ReminderScheduler {
             if (!TaskNotifications.canNotify(context)) return;
             TaskStore.Task task = store.claimDueReminder(id);
             if (task != null) {
-                if (task.notifyBeforeMinutes >= 0) {
+                if (task.notifyBeforeMinutes >= 0 || task.dueAt == 0) {
                     // The scheduled task now becomes a pinned notification; no duplicate alert.
                     TaskNotifications.show(context, task);
                 } else {

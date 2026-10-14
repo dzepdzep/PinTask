@@ -1,4 +1,11 @@
-# PinTask v1.3 — Tasks + Shift Scheduler
+## v1.4 changes
+
+- Add personal or shift tasks without a specific time. Add, change or remove timing later from the task.
+- Untimed shift tasks become available at shift start and are included when starting midway through a shift.
+- Define your own shift hours; edit existing template hours. Template edits apply to future runs only, and timed rules retain their offsets from shift start.
+- Repeating shift rules still require a first time. Personal task timing can be removed, which also turns off recurrence.
+
+# PinTask v1.4 — Optional timing + custom shifts
 
 Native Android Java project (minimum Android 8.0 / API 26, targets API 35, builds against SDK 36). No login, network service, or third-party runtime dependencies. All tasks and shifts are stored locally in SQLite.
 

@@ -105,6 +105,31 @@ public final class TaskStore extends SQLiteOpenHelper {
         return db.insertOrThrow("tasks", null, values);
     }
 
+    public synchronized Task updateTiming(long id, long dueAt, int recurrence, int early) {
+        Task task = find(id);
+        if (task == null || task.done) throw new IllegalArgumentException("Task is no longer active");
+        if (dueAt < 0 || (dueAt > 0 && dueAt <= System.currentTimeMillis()))
+            throw new IllegalArgumentException("Choose a future time");
+        long availableAt = task.createdAt;
+        if (task.shiftRunId > 0) {
+            try (Cursor c = getReadableDatabase().rawQuery(
+                    "SELECT started_at, ends_at FROM shift_runs WHERE _id=? AND ended=0",
+                    new String[]{Long.toString(task.shiftRunId)})) {
+                if (!c.moveToFirst() || (dueAt > 0 && (dueAt < c.getLong(0) || dueAt >= c.getLong(1))))
+                    throw new IllegalArgumentException("Choose a time inside this shift");
+                if (dueAt == 0) availableAt = Math.max(System.currentTimeMillis(), c.getLong(0));
+            }
+        }
+        ContentValues values = new ContentValues();
+        values.put("due_at", dueAt);
+        if (task.shiftRunId > 0 && dueAt == 0) values.put("created_at", availableAt);
+        values.put("recurrence", dueAt == 0 || task.shiftRunId > 0 ? REPEAT_NEVER : recurrence);
+        values.put("notify_before_min", dueAt == 0 ? -1 : early);
+        values.put("reminded_at", 0);
+        getWritableDatabase().update("tasks", values, "_id=? AND done=0", new String[]{Long.toString(id)});
+        return find(id);
+    }
+
     /** Idempotently completes the task, optionally creating its next occurrence. */
     public synchronized Completion complete(long id) {
         SQLiteDatabase db = getWritableDatabase();
@@ -157,7 +182,7 @@ public final class TaskStore extends SQLiteOpenHelper {
         db.beginTransaction();
         try {
             Task task = findIn(db, id);
-            if (task == null || task.done || task.dueAt <= 0 ||
+            if (task == null || task.done || (task.dueAt <= 0 && task.shiftRunId == 0) ||
                     task.notificationAt() > System.currentTimeMillis() || task.remindedAt != 0) {
                 db.setTransactionSuccessful();
                 return null;
@@ -270,6 +295,7 @@ public final class TaskStore extends SQLiteOpenHelper {
         }
 
         public long notificationAt() {
+            if (dueAt == 0 && shiftRunId > 0) return createdAt;
             return dueAt - Math.max(0, notifyBeforeMinutes) * 60_000L;
         }
     }

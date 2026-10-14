@@ -52,6 +52,7 @@ public final class MainActivity extends Activity {
     private Spinner earlySpinner;
     private TextView dateButton;
     private long selectedDueAt;
+    private LinearLayout optionalSettings;
     private LinearLayout activeContainer;
     private LinearLayout completedContainer;
     private LinearLayout warningContainer;
@@ -146,6 +147,7 @@ public final class MainActivity extends Activity {
         ReminderScheduler.schedule(this, task);
         entry.setText("");
         entry.clearFocus();
+        optionalSettings.setVisibility(View.GONE);
         prioritySpinner.setSelection(TaskStore.PRIORITY_NORMAL);
         repeatSpinner.setSelection(TaskStore.REPEAT_NEVER);
         earlySpinner.setSelection(4); // Default: appear 15 minutes before the task.
@@ -252,6 +254,10 @@ public final class MainActivity extends Activity {
         TextView info = makeText(meta, 11, MUTED, false);
         info.setPadding(0, dp(5), 0, 0);
         details.addView(info);
+        TextView timing = makeText(task.dueAt == 0 ? "No time · Add time" : "Change / remove time", 12, ACCENT, true);
+        timing.setPadding(0, dp(10), 0, dp(10));
+        timing.setOnClickListener(v -> TaskTimingEditor.open(this, task, this::refresh));
+        details.addView(timing);
         row.addView(details, new LinearLayout.LayoutParams(0, -2, 1f));
         Button done = makeButton("Done", ACCENT, BG);
         LinearLayout.LayoutParams doneParams = new LinearLayout.LayoutParams(dp(74), dp(43));
@@ -310,7 +316,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams heading = new LinearLayout.LayoutParams(-1, -2);
         heading.topMargin = dp(14);
         body.addView(title, heading);
-        TextView blurb = makeText("Add tasks, set priorities and reminders, and finish them right from notifications.", 14, MUTED, false);
+        TextView blurb = makeText("Just type a task and add it. No time needed — you can set one later.", 14, MUTED, false);
         blurb.setPadding(0, dp(10), 0, dp(23));
         body.addView(blurb);
         Button shiftMode = makeButton("▦  Shift scheduler →", SURFACE, ACCENT);
@@ -345,11 +351,19 @@ public final class MainActivity extends Activity {
         });
         compose.addView(entry, new LinearLayout.LayoutParams(-1, -2));
 
+        Button options = makeButton("Priority, time & repeat (optional)", SURFACE, ACCENT);
+        compose.addView(options, new LinearLayout.LayoutParams(-1, dp(46)));
+        optionalSettings = new LinearLayout(this);
+        optionalSettings.setOrientation(LinearLayout.VERTICAL);
+        optionalSettings.setVisibility(View.GONE);
+        compose.addView(optionalSettings, new LinearLayout.LayoutParams(-1, -2));
+        options.setOnClickListener(v -> optionalSettings.setVisibility(
+                optionalSettings.getVisibility() == View.GONE ? View.VISIBLE : View.GONE));
         LinearLayout selectors = new LinearLayout(this);
         selectors.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams selectsParams = new LinearLayout.LayoutParams(-1, -2);
         selectsParams.bottomMargin = dp(12);
-        compose.addView(selectors, selectsParams);
+        optionalSettings.addView(selectors, selectsParams);
         LinearLayout priorityBox = new LinearLayout(this);
         priorityBox.setOrientation(LinearLayout.VERTICAL);
         priorityBox.addView(makeText("PRIORITY", 10, MUTED, true));
@@ -374,16 +388,16 @@ public final class MainActivity extends Activity {
         dateButton.setPadding(dp(12), dp(11), dp(12), dp(11));
         dateButton.setBackground(outline(BG, 12, BORDER));
         dateButton.setOnClickListener(v -> chooseDate());
-        compose.addView(dateButton, new LinearLayout.LayoutParams(-1, -2));
+        optionalSettings.addView(dateButton, new LinearLayout.LayoutParams(-1, -2));
 
         TextView earlyLabel = makeText("SHOW NOTIFICATION", 10, MUTED, true);
         earlyLabel.setPadding(0, dp(13), 0, dp(4));
-        compose.addView(earlyLabel);
+        optionalSettings.addView(earlyLabel);
         earlySpinner = makeSpinner(new String[]{"Immediately", "At task time", "5 min before",
                 "10 min before", "15 min before", "30 min before", "1 hour before"}, 4);
         LinearLayout.LayoutParams earlyParams = new LinearLayout.LayoutParams(-1, dp(44));
         earlyParams.bottomMargin = dp(5);
-        compose.addView(earlySpinner, earlyParams);
+        optionalSettings.addView(earlySpinner, earlyParams);
 
         TextView clearDate = makeText("Clear reminder time", 12, MUTED, false);
         clearDate.setGravity(Gravity.END);
@@ -392,7 +406,7 @@ public final class MainActivity extends Activity {
             selectedDueAt = 0;
             dateButton.setText("+ Set reminder date & time (optional)");
         });
-        compose.addView(clearDate);
+        optionalSettings.addView(clearDate);
         Button add = makeButton("+  Add task", ACCENT, BG);
         compose.addView(add, new LinearLayout.LayoutParams(-1, dp(48)));
         add.setOnClickListener(v -> addTask());

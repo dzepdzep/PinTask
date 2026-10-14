@@ -76,6 +76,7 @@ public final class TaskNotifications {
 
     public static void show(Context context, TaskStore.Task task) {
         if (task == null || task.done || !canNotify(context)) return;
+        if (task.dueAt == 0 && task.shiftRunId > 0 && System.currentTimeMillis() < task.notificationAt()) return;
         // Scheduled tasks appear only when their selected advance interval begins.
         if (task.dueAt > 0 && task.notifyBeforeMinutes >= 0 &&
                 System.currentTimeMillis() < task.notificationAt()) return;

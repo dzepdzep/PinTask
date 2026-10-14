@@ -47,7 +47,7 @@ public final class ShiftActivity extends Activity {
     private EditText templateName, stepName;
     private TextView newStartView, newEndView, stepTimeView, selectedTemplateView, dateView;
     private LinearLayout stepsArea, currentArea;
-    private int newStart = 8 * 60, newEnd = 20 * 60, stepClock = 8 * 60;
+    private int newStart = -1, newEnd = -1, stepClock = -1;
     private final Calendar selectedDate = Calendar.getInstance();
     private long selectedTemplateId = -1;
 
@@ -97,8 +97,8 @@ public final class ShiftActivity extends Activity {
     private void refreshSteps(boolean resetTime) {
         ShiftRepository.Template t = selectedTemplate();
         if (t == null || stepsArea == null) return;
-        if (resetTime) stepClock = t.startMinute;
-        stepTimeView.setText("First time: " + clock(stepClock));
+        if (resetTime) stepClock = -1;
+        stepTimeView.setText(stepClock < 0 ? "No specific time · Tap to set a time" : "First time: " + clock(stepClock));
         selectedTemplateView.setText("SHIFT TEMPLATE · " + t.name + " · " + clock(t.startMinute) + "–" + clock(t.endMinute()));
         stepsArea.removeAllViews();
         List<ShiftRepository.Step> rules = repository.steps(t.id);
@@ -113,12 +113,16 @@ public final class ShiftActivity extends Activity {
             name.setMaxLines(2);
             name.setEllipsize(TextUtils.TruncateAt.END);
             summary.addView(name);
-            String time = clock((t.startMinute + step.firstMinute) % 1440) +
+            String time = step.firstMinute < 0 ? "No specific time" : clock((t.startMinute + step.firstMinute) % 1440) +
                     (step.everyMinute > 0 ? " · Every " + intervalLabel(step.everyMinute) : " · Once") +
                     (step.notifyBeforeMinutes > 0 ? " · " + step.notifyBeforeMinutes + "m early" : "");
             TextView meta = text(time, 11, MUTED, false);
             meta.setPadding(0, dp(5), 0, 0);
             summary.addView(meta);
+            TextView edit = text("Add / change / remove time", 12, ACCENT, true);
+            edit.setPadding(0, dp(12), 0, dp(12));
+            edit.setOnClickListener(v -> editStepTime(step, t));
+            summary.addView(edit);
             box.addView(summary, new LinearLayout.LayoutParams(0, -2, 1f));
             Button delete = button("Remove", SURFACE, MUTED);
             box.addView(delete, new LinearLayout.LayoutParams(dp(82), dp(42)));
@@ -136,6 +140,7 @@ public final class ShiftActivity extends Activity {
 
     private void addTemplate() {
         try {
+            if (newStart < 0 || newEnd < 0) throw new IllegalArgumentException("Choose your shift start and end times");
             ShiftRepository.Template t = repository.addTemplate(templateName.getText().toString(), newStart, newEnd);
             templateName.setText("");
             refreshTemplates(t.id);
@@ -145,15 +150,48 @@ public final class ShiftActivity extends Activity {
         }
     }
 
+    private void editStepTime(ShiftRepository.Step step, ShiftRepository.Template t) {
+        new AlertDialog.Builder(this).setTitle("Task time")
+                .setMessage("Changes apply the next time you start this template.")
+                .setPositiveButton("Set time", (d, w) -> pickTime(stepTimeView,
+                        step.firstMinute < 0 ? t.startMinute : (t.startMinute + step.firstMinute) % 1440, m -> {
+                    try {
+                        repository.updateStepTime(step, ShiftRepository.offsetFromClock(t, m));
+                        refreshSteps(false);
+                    } catch (IllegalArgumentException e) { show(e.getMessage()); }
+                }))
+                .setNeutralButton("No time", (d, w) -> {
+                    repository.updateStepTime(step, -1);
+                    refreshSteps(false);
+                }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void editShiftHours() {
+        ShiftRepository.Template t = selectedTemplate();
+        if (t == null) { show("Create your own shift below first"); return; }
+        new AlertDialog.Builder(this).setTitle("Edit shift hours")
+                .setMessage("Choose start, then end. Timed tasks keep their offset from the shift start. Existing scheduled shifts stay unchanged.")
+                .setPositiveButton("Choose hours", (d, w) -> pickTime(newStartView, t.startMinute, start ->
+                        pickTime(newEndView, t.endMinute(), end -> {
+                            try {
+                                repository.updateTemplateTimes(t.id, start, end);
+                                refreshTemplates(t.id);
+                            } catch (IllegalArgumentException e) { show(e.getMessage()); }
+                        })))
+                .setNegativeButton("Cancel", null).show();
+    }
+
     private void addStep() {
         ShiftRepository.Template t = selectedTemplate();
-        if (t == null) return;
-        int offset = ShiftRepository.offsetFromClock(t, stepClock);
+        if (t == null) { show("Create your own shift below first"); return; }
+        int offset = stepClock < 0 ? -1 : ShiftRepository.offsetFromClock(t, stepClock);
         try {
             repository.addStep(t.id, stepName.getText().toString(), offset,
                     INTERVALS[intervalSpinner.getSelectedItemPosition()],
                     prioritySpinner.getSelectedItemPosition(), EARLY[earlySpinner.getSelectedItemPosition()]);
             stepName.setText("");
+            stepClock = -1;
+            intervalSpinner.setSelection(0);
             refreshSteps(false);
             show("Added to " + t.name);
         } catch (IllegalArgumentException e) {
@@ -163,7 +201,7 @@ public final class ShiftActivity extends Activity {
 
     private void startShift() {
         ShiftRepository.Template t = selectedTemplate();
-        if (t == null) return;
+        if (t == null) { show("Create your own shift below first"); return; }
         try {
             long time = ShiftRepository.runStartForDate(t, selectedDate.get(Calendar.YEAR),
                     selectedDate.get(Calendar.MONTH), selectedDate.get(Calendar.DAY_OF_MONTH));
@@ -216,11 +254,15 @@ public final class ShiftActivity extends Activity {
             details.setOrientation(LinearLayout.VERTICAL);
             TextView title = text(task.title, 14, task.done ? MUTED : WHITE, !task.done);
             details.addView(title);
-            String when = DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(task.dueAt)) +
+            String when = task.dueAt == 0 ? (task.done ? "Done" : "No specific time") : DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(task.dueAt)) +
                     " · " + (task.done ? "Done" : System.currentTimeMillis() > task.dueAt ? "Overdue" : "Scheduled");
             details.addView(text(when, 12, task.done ? ACCENT : MUTED, false));
             row.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
             if (!task.done) {
+                TextView timing = text("Add / change time", 12, ACCENT, true);
+                timing.setPadding(0, dp(12), 0, dp(12));
+                timing.setOnClickListener(v -> TaskTimingEditor.open(this, task, this::refreshCurrentRun));
+                details.addView(timing);
                 Button done = button("Done", ACCENT, BG);
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(68), dp(42));
                 p.leftMargin = dp(9);
@@ -247,11 +289,12 @@ public final class ShiftActivity extends Activity {
     }
 
     private void pickTime(TextView target, int minute, IntConsumer selected) {
+        int initial = minute < 0 ? 0 : minute;
         new TimePickerDialog(this, (view, hour, min) -> {
             int newMinute = hour * 60 + min;
             selected.accept(newMinute);
             // Caller controls the label and selected time.
-        }, minute / 60, minute % 60, true).show();
+        }, initial / 60, initial % 60, android.text.format.DateFormat.is24HourFormat(this)).show();
     }
 
     private void pickShiftDate() {
@@ -387,8 +430,11 @@ public final class ShiftActivity extends Activity {
         root.addView(text("SELECT SHIFT TEMPLATE", 12, ACCENT, true), spaced(0, 9));
         templateSpinner = spinner(new String[]{}, 0);
         root.addView(templateSpinner, spaced(0, 12));
-        selectedTemplateView = text("", 12, MUTED, true);
+        selectedTemplateView = text("No templates yet. Create your own shift below.", 12, MUTED, true);
         root.addView(selectedTemplateView, spaced(0, 12));
+        Button editHours = button("Edit selected shift hours", SURFACE, ACCENT);
+        root.addView(editHours, spaced(0, 12));
+        editHours.setOnClickListener(v -> editShiftHours());
         templateSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (position < templates.size()) {
@@ -408,7 +454,7 @@ public final class ShiftActivity extends Activity {
         rule.addView(text("ADD SHIFT TASK", 12, MUTED, true), spaced(0, 6));
         stepName = input("What needs doing?");
         rule.addView(stepName, spaced(0, 6));
-        stepTimeView = text("", 14, ACCENT, true);
+        stepTimeView = text("No specific time · Tap to set a time", 14, ACCENT, true);
         stepTimeView.setPadding(dp(12), dp(12), dp(12), dp(12));
         stepTimeView.setBackground(outline(BG, 10));
         stepTimeView.setOnClickListener(v -> pickTime(stepTimeView, stepClock, m -> {
@@ -416,6 +462,9 @@ public final class ShiftActivity extends Activity {
             stepTimeView.setText("First time: " + clock(m));
         }));
         rule.addView(stepTimeView, spaced(0, 10));
+        Button noTime = button("No specific time", SURFACE, ACCENT);
+        rule.addView(noTime, spaced(0, 10));
+        noTime.setOnClickListener(v -> { stepClock = -1; intervalSpinner.setSelection(0); refreshSteps(false); });
         rule.addView(text("REPEAT WITHIN THIS SHIFT", 11, MUTED, true));
         intervalSpinner = spinner(new String[]{"Once", "Every 30 minutes", "Every hour",
                 "Every 2 hours", "Every 3 hours", "Every 4 hours"}, 0);
@@ -454,7 +503,7 @@ public final class ShiftActivity extends Activity {
         LinearLayout timeRow = new LinearLayout(this);
         timeRow.setOrientation(LinearLayout.HORIZONTAL);
         custom.addView(timeRow, spaced(0, 10));
-        newStartView = text("Start: " + clock(newStart), 14, WHITE, true);
+        newStartView = text("Choose start time", 14, WHITE, true);
         newStartView.setGravity(Gravity.CENTER);
         newStartView.setPadding(dp(6), dp(12), dp(6), dp(12));
         newStartView.setBackground(outline(BG, 9));
@@ -465,7 +514,7 @@ public final class ShiftActivity extends Activity {
             newStart = m;
             newStartView.setText("Start: " + clock(m));
         }));
-        newEndView = text("End: " + clock(newEnd), 14, WHITE, true);
+        newEndView = text("Choose end time", 14, WHITE, true);
         newEndView.setGravity(Gravity.CENTER);
         newEndView.setPadding(dp(6), dp(12), dp(6), dp(12));
         newEndView.setBackground(outline(BG, 9));

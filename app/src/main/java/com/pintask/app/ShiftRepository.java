@@ -31,20 +31,6 @@ public final class ShiftRepository implements AutoCloseable {
                 "_id INTEGER PRIMARY KEY AUTOINCREMENT, template_id INTEGER NOT NULL," +
                 "label TEXT NOT NULL, started_at INTEGER NOT NULL, ends_at INTEGER NOT NULL," +
                 "ended INTEGER NOT NULL DEFAULT 0)");
-        try (Cursor c = db.rawQuery("SELECT COUNT(*) FROM shift_templates", null)) {
-            if (c.moveToFirst() && c.getLong(0) == 0) {
-                ContentValues day = new ContentValues();
-                day.put("name", "TD · Day shift");
-                day.put("start_min", 8 * 60);
-                day.put("duration_min", 12 * 60);
-                db.insertOrThrow("shift_templates", null, day);
-                ContentValues night = new ContentValues();
-                night.put("name", "ND · Night shift");
-                night.put("start_min", 20 * 60);
-                night.put("duration_min", 12 * 60);
-                db.insertOrThrow("shift_templates", null, night);
-            }
-        }
     }
 
     private static String[] args(long id) { return new String[]{Long.toString(id)}; }
@@ -111,8 +97,10 @@ public final class ShiftRepository implements AutoCloseable {
         String text = title == null ? "" : title.trim();
         if (text.isEmpty()) throw new IllegalArgumentException("Enter a task title");
         if (text.length() > 160) text = text.substring(0, 160);
-        if (firstMinute < 0 || firstMinute >= t.durationMinutes)
+        if (firstMinute < -1 || firstMinute >= t.durationMinutes)
             throw new IllegalArgumentException("First task time must be inside the shift");
+        if (firstMinute == -1 && everyMinute != 0)
+            throw new IllegalArgumentException("Set a first time for repeating tasks");
         if (everyMinute != 0 && everyMinute != 30 && everyMinute != 60 &&
                 everyMinute != 120 && everyMinute != 180 && everyMinute != 240)
             throw new IllegalArgumentException("Unsupported interval");
@@ -134,6 +122,31 @@ public final class ShiftRepository implements AutoCloseable {
         // Remove template rule only. Existing shifts keep their instantiated tasks.
         store.getWritableDatabase().delete("shift_steps", "_id=? AND template_id=?",
                 new String[]{Long.toString(id), Long.toString(templateId)});
+    }
+
+    public void updateStepTime(Step step, int firstMinute) {
+        Template t = findTemplate(step.templateId);
+        if (t == null || firstMinute < -1 || firstMinute >= t.durationMinutes)
+            throw new IllegalArgumentException("Choose a time inside the shift");
+        ContentValues values = new ContentValues();
+        values.put("first_min", firstMinute);
+        if (firstMinute == -1) values.put("every_min", 0);
+        store.getWritableDatabase().update("shift_steps", values, "_id=?", args(step.id));
+    }
+
+    public void updateTemplateTimes(long id, int start, int end) {
+        if (findTemplate(id) == null || start < 0 || start >= 1440 || end < 0 || end >= 1440)
+            throw new IllegalArgumentException("Choose valid shift hours");
+        int duration = (end - start + 1440) % 1440;
+        if (duration == 0) duration = 1440;
+        for (Step step : steps(id)) {
+            if (step.firstMinute >= duration)
+                throw new IllegalArgumentException("A task falls outside these hours. Change its time first");
+        }
+        ContentValues values = new ContentValues();
+        values.put("start_min", start);
+        values.put("duration_min", duration);
+        store.getWritableDatabase().update("shift_templates", values, "_id=?", args(id));
     }
 
     public Run currentRun() {
@@ -178,6 +191,10 @@ public final class ShiftRepository implements AutoCloseable {
         List<Occurrence> planned = new ArrayList<>();
         long now = System.currentTimeMillis();
         for (Step rule : rules) {
+            if (rule.firstMinute == -1) {
+                planned.add(new Occurrence(rule, 0));
+                continue;
+            }
             for (int minute : ShiftTimes.occurrenceOffsets(rule.firstMinute,
                     rule.everyMinute, template.durationMinutes)) {
                 long due = ShiftTimes.atMinuteOffset(startsAt, minute);
@@ -186,6 +203,7 @@ public final class ShiftRepository implements AutoCloseable {
                         "Maximum 120 occurrences per shift. Use longer repeat intervals");
             }
         }
+        if (planned.size() > 120) throw new IllegalArgumentException("Maximum 120 tasks per shift");
         if (planned.isEmpty())
             throw new IllegalArgumentException("No future task occurrences remain on this shift");
         SQLiteDatabase db = store.getWritableDatabase();
@@ -199,7 +217,7 @@ public final class ShiftRepository implements AutoCloseable {
             values.put("ends_at", endsAt);
             runId = db.insertOrThrow("shift_runs", null, values);
             for (Occurrence occurrence : planned) {
-                TaskStore.insert(db, occurrence.rule.title, now, occurrence.rule.priority,
+                TaskStore.insert(db, occurrence.rule.title, occurrence.dueAt == 0 ? Math.max(now, startsAt) : now, occurrence.rule.priority,
                         occurrence.dueAt, TaskStore.REPEAT_NEVER,
                         occurrence.rule.notifyBeforeMinutes, runId, template.name);
             }
