@@ -46,7 +46,8 @@ public final class ShiftActivity extends Activity {
     private Spinner templateSpinner, intervalSpinner, earlySpinner, prioritySpinner;
     private EditText templateName, stepName;
     private TextView newStartView, newEndView, stepTimeView, selectedTemplateView, dateView;
-    private LinearLayout stepsArea, currentArea;
+    private LinearLayout stepsArea, currentArea, doneArea;
+    private int doneLimit = 20;
     private int newStart = -1, newEnd = -1, stepClock = -1;
     private final Calendar selectedDate = Calendar.getInstance();
     private long selectedTemplateId = -1;
@@ -231,6 +232,7 @@ public final class ShiftActivity extends Activity {
 
     private void refreshCurrentRun() {
         currentArea.removeAllViews();
+        refreshDone();
         ShiftRepository.Run run = repository.currentRun();
         if (run == null) {
             currentArea.addView(text("No active shift. Choose a template and date, then start your shift.", 13, MUTED, false));
@@ -249,6 +251,7 @@ public final class ShiftActivity extends Activity {
                         System.currentTimeMillis() > run.endsAt ? " · Shift time ended" : " · Shift in progress"),
                 12, ACCENT, false), spaced(0, 12));
         for (TaskStore.Task task : tasks) {
+            if (task.done) continue;
             LinearLayout row = rowBox();
             LinearLayout details = new LinearLayout(this);
             details.setOrientation(LinearLayout.VERTICAL);
@@ -277,6 +280,7 @@ public final class ShiftActivity extends Activity {
                     }
                     refreshCurrentRun();
                 });
+                row.addView(TaskCards.overflow(this, task, this::refreshCurrentRun));
             }
             currentArea.addView(row, spaced(0, 6));
         }
@@ -286,6 +290,22 @@ public final class ShiftActivity extends Activity {
         Button end = button("End shift · Cancel unfinished tasks", SURFACE, Color.rgb(255, 158, 134));
         currentArea.addView(end, spaced(0, 8));
         end.setOnClickListener(v -> finishShift(run));
+    }
+
+    private void refreshDone() {
+        if (doneArea == null) return;
+        doneArea.removeAllViews();
+        try (TaskStore store = new TaskStore(this)) {
+            List<TaskStore.Task> completed = store.completedShifts(doneLimit + 1);
+            if (completed.isEmpty()) doneArea.addView(text("Finished shift tasks will appear here, including after you end a shift.", 13, MUTED, false));
+            for (int i = 0; i < Math.min(doneLimit, completed.size()); i++)
+                doneArea.addView(TaskCards.done(this, completed.get(i), this::refreshCurrentRun));
+            if (completed.size() > doneLimit) {
+                Button more = button("Show more completed tasks", SURFACE, ACCENT);
+                doneArea.addView(more);
+                more.setOnClickListener(v -> { doneLimit += 20; refreshDone(); });
+            }
+        }
     }
 
     private void pickTime(TextView target, int minute, IntConsumer selected) {
@@ -426,6 +446,10 @@ public final class ShiftActivity extends Activity {
         root.addView(text("YOUR CURRENT SHIFT", 12, ACCENT, true), spaced(0, 9));
         currentArea = panel();
         root.addView(currentArea, spaced(0, 22));
+
+        root.addView(text("DONE · SHIFT HISTORY", 12, ACCENT, true), spaced(0, 9));
+        doneArea = panel();
+        root.addView(doneArea, spaced(0, 22));
 
         root.addView(text("SELECT SHIFT TEMPLATE", 12, ACCENT, true), spaced(0, 9));
         templateSpinner = spinner(new String[]{}, 0);

@@ -129,4 +129,70 @@ public class TaskTimingTest {
         store.complete(task.id);
         assertTrue(store.active().isEmpty());
     }
+
+    @Test public void repeatKeepsHistoryAndRecurrenceCreatesOnlyOneNextTask() {
+        TaskStore.Task original = store.add("Reusable task", 2, 0, 0, -1);
+        store.complete(original.id);
+        TaskStore.Task copy = store.repeat(original.id, 0, 0, -1);
+        assertNotEquals(original.id, copy.id);
+        assertEquals(2, copy.priority);
+        assertEquals(1, store.completedPersonalCount());
+        long due = System.currentTimeMillis() + 3_600_000;
+        TaskStore.Task repeating = store.updateTiming(copy.id, due, TaskStore.REPEAT_DAILY, 0);
+        TaskStore.Completion completion = store.complete(repeating.id);
+        assertNotNull(completion.nextTask);
+        assertTrue(completion.nextTask.dueAt > due);
+        assertNull(store.complete(repeating.id));
+        assertEquals(1, store.activePersonal().size());
+        assertThrows(IllegalArgumentException.class, () -> store.reopen(repeating.id));
+        store.stopRepeating(completion.nextTask.id);
+        assertNull(store.complete(completion.nextTask.id).nextTask);
+        assertEquals(3, store.completedPersonalCount());
+    }
+
+    @Test public void undoRenamePriorityAndDeleteAffectOnlySelectedTask() {
+        TaskStore.Task task = store.add("Original");
+        store.complete(task.id);
+        TaskStore.Task reopened = store.reopen(task.id);
+        assertEquals(task.id, reopened.id);
+        assertFalse(reopened.done);
+        assertEquals(0, reopened.completedAt);
+        assertEquals(0, reopened.dueAt);
+        assertEquals("Renamed", store.rename(task.id, " Renamed ").title);
+        assertEquals(2, store.changePriority(task.id, 2).priority);
+        assertThrows(IllegalArgumentException.class, () -> store.rename(task.id, " "));
+        TaskStore.Task other = store.add("Keep me");
+        store.delete(task.id);
+        assertNull(store.find(task.id));
+        assertNotNull(store.find(other.id));
+    }
+
+    @Test public void historyCanLoadBeyondOriginalEightTasksAndKeepEndedShifts() {
+        for (int i = 0; i < 25; i++) store.complete(store.add("Task " + i).id);
+        assertEquals(20, store.completedPersonal(20).size());
+        assertEquals(25, store.completedPersonal(40).size());
+        ShiftRepository.Template template = shifts.addTemplate("Shift", 600, 1080);
+        shifts.addStep(template.id, "Shift task", -1, 0, 1, 0);
+        ShiftRepository.Run run = shifts.startShift(template.id, System.currentTimeMillis() - 60_000);
+        TaskStore.Task shiftTask = shifts.runTasks(run.id).get(0);
+        store.complete(shiftTask.id);
+        shifts.endShift(run.id);
+        assertEquals(1, store.completedShifts(20).size());
+        assertEquals(0, store.repeat(shiftTask.id, 0, 0, -1).shiftRunId);
+    }
+
+    @Test public void completingInUiShowsDoneCardWithOverflowMenu() {
+        store.add("Finish this");
+        try (org.robolectric.android.controller.ActivityController<MainActivity> controller =
+                     Robolectric.buildActivity(MainActivity.class).setup()) {
+            View root = controller.get().getWindow().getDecorView();
+            findText(root, "Done").performClick();
+            assertNotNull(findText(root, "DONE  ·  1"));
+            assertNotNull(findText(root, "✓  Finish this"));
+            findText(root, "⋮").performClick();
+            android.widget.PopupMenu popup = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
+            assertEquals("Repeat now", popup.getMenu().getItem(0).getTitle());
+            assertEquals("Repeat at a chosen time…", popup.getMenu().getItem(1).getTitle());
+        }
+    }
 }

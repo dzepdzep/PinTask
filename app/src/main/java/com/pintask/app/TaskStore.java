@@ -130,6 +130,56 @@ public final class TaskStore extends SQLiteOpenHelper {
         return find(id);
     }
 
+    /** Repeat creates a new personal task and leaves the completed record intact. */
+    public synchronized Task repeat(long id, long dueAt, int recurrence, int early) {
+        Task original = find(id);
+        if (original == null) throw new IllegalArgumentException("Task no longer exists");
+        if (dueAt > 0 && dueAt <= System.currentTimeMillis())
+            throw new IllegalArgumentException("Choose a future time");
+        return add(original.title, original.priority, dueAt, recurrence, early);
+    }
+
+    public synchronized Task rename(long id, String title) {
+        String cleaned = title == null ? "" : title.trim();
+        if (cleaned.isEmpty()) throw new IllegalArgumentException("Enter a task name");
+        ContentValues values = new ContentValues();
+        values.put("title", cleaned.substring(0, Math.min(160, cleaned.length())));
+        getWritableDatabase().update("tasks", values, "_id=?", new String[]{Long.toString(id)});
+        return find(id);
+    }
+
+    public synchronized Task changePriority(long id, int priority) {
+        if (priority < 0 || priority > 2) throw new IllegalArgumentException("Invalid priority");
+        ContentValues values = new ContentValues();
+        values.put("priority", priority);
+        getWritableDatabase().update("tasks", values, "_id=? AND done=0", new String[]{Long.toString(id)});
+        return find(id);
+    }
+
+    public synchronized Task reopen(long id) {
+        Task task = find(id);
+        if (task == null || !task.done || task.recurrence != REPEAT_NEVER || task.shiftRunId > 0)
+            throw new IllegalArgumentException("Use Repeat as a new task for this item");
+        ContentValues values = new ContentValues();
+        values.put("done", 0);
+        values.put("completed_at", 0);
+        values.put("due_at", 0);
+        values.put("notify_before_min", -1);
+        values.put("reminded_at", 0);
+        getWritableDatabase().update("tasks", values, "_id=? AND done=1", new String[]{Long.toString(id)});
+        return find(id);
+    }
+
+    public synchronized void delete(long id) {
+        getWritableDatabase().delete("tasks", "_id=?", new String[]{Long.toString(id)});
+    }
+
+    public synchronized void stopRepeating(long id) {
+        ContentValues values = new ContentValues();
+        values.put("recurrence", REPEAT_NEVER);
+        getWritableDatabase().update("tasks", values, "_id=? AND done=0", new String[]{Long.toString(id)});
+    }
+
     /** Idempotently completes the task, optionally creating its next occurrence. */
     public synchronized Completion complete(long id) {
         SQLiteDatabase db = getWritableDatabase();
@@ -218,7 +268,15 @@ public final class TaskStore extends SQLiteOpenHelper {
     }
 
     public synchronized List<Task> completedPersonal() {
-        return query("done=1 AND shift_run_id=0", "completed_at DESC", 8);
+        return completedPersonal(20);
+    }
+
+    public synchronized List<Task> completedPersonal(int limit) {
+        return query("done=1 AND shift_run_id=0", "completed_at DESC, _id DESC", limit);
+    }
+
+    public synchronized List<Task> completedShifts(int limit) {
+        return query("done=1 AND shift_run_id>0", "completed_at DESC, _id DESC", limit);
     }
 
     public synchronized int completedPersonalCount() {

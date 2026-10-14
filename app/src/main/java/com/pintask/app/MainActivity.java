@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private static final int ACCENT = Color.rgb(175, 241, 138);
     private static final int REQUEST_NOTIFICATIONS = 7;
 
+    private int doneLimit = 20;
     private TaskStore store;
     private EditText entry;
     private Spinner prioritySpinner;
@@ -174,7 +175,7 @@ public final class MainActivity extends Activity {
     private void refresh() {
         if (activeContainer == null) return;
         List<TaskStore.Task> active = store.activePersonal();
-        List<TaskStore.Task> recent = store.completedPersonal();
+        List<TaskStore.Task> recent = store.completedPersonal(doneLimit);
         countView.setText(active.size() + (active.size() == 1 ? " task" : " tasks"));
         activeContainer.removeAllViews();
         completedContainer.removeAllViews();
@@ -205,21 +206,17 @@ public final class MainActivity extends Activity {
             for (TaskStore.Task task : active) activeContainer.addView(taskRow(task));
         }
         int completedCount = store.completedPersonalCount();
-        completedHeader.setText("COMPLETED  ·  " + completedCount);
-        completedHeader.setVisibility(completedCount == 0 ? View.GONE : View.VISIBLE);
-        completedContainer.setVisibility(completedCount == 0 ? View.GONE : View.VISIBLE);
-        for (TaskStore.Task task : recent) {
-            TextView done = makeText("✓  " + task.title, 14, MUTED, false);
-            done.setSingleLine(true);
-            done.setEllipsize(TextUtils.TruncateAt.END);
-            done.setPadding(dp(12), dp(12), dp(12), dp(12));
-            done.setBackground(outline(SURFACE, 12, BORDER));
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2);
-            params.bottomMargin = dp(7);
-            completedContainer.addView(done, params);
+        completedHeader.setText("DONE  ·  " + completedCount);
+        completedHeader.setVisibility(View.VISIBLE);
+        completedContainer.setVisibility(View.VISIBLE);
+        if (recent.isEmpty()) completedContainer.addView(makeText("Finished tasks will appear here.", 13, MUTED, false));
+        for (TaskStore.Task task : recent) completedContainer.addView(TaskCards.done(this, task, this::refresh));
+        if (completedCount > recent.size()) {
+            Button more = makeButton("Show more completed tasks", SURFACE, ACCENT);
+            completedContainer.addView(more);
+            more.setOnClickListener(v -> { doneLimit += 20; refresh(); });
         }
     }
-
     private View taskRow(TaskStore.Task task) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -264,6 +261,7 @@ public final class MainActivity extends Activity {
         doneParams.leftMargin = dp(9);
         row.addView(done, doneParams);
         done.setOnClickListener(v -> complete(task));
+        row.addView(TaskCards.overflow(this, task, this::refresh));
         return row;
     }
 

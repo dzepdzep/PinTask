@@ -1,3 +1,10 @@
+## v1.5 changes
+
+- Separate To do and Done sections, with completion dates and three-dot task menus. Load older completed tasks with Show more.
+- Repeat a completed task immediately or at a chosen time, preserving the Done record. Make a new daily, weekly or monthly repeating task; the next occurrence is created on completion.
+- Rename tasks, change active priorities, set a 15-minute reminder, stop repeating, or delete a single task with confirmation.
+- Undo completion for one-off personal tasks returns the same task to To do without a time. Recurring items use Repeat instead, so their existing next occurrence is not accidentally duplicated by undo.
+- Shift completions remain visible in Done after ending a shift. Repeating a finished shift item creates a personal task, as labeled in the menu; it does not restart an ended shift.
 ## v1.4 changes
 
 - Add personal or shift tasks without a specific time. Add, change or remove timing later from the task.
