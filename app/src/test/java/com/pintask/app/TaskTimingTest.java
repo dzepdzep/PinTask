@@ -7,6 +7,11 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
+import org.robolectric.Robolectric;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import android.widget.EditText;
 import org.robolectric.annotation.Config;
 import static org.junit.Assert.*;
 
@@ -41,6 +46,44 @@ public class TaskTimingTest {
         assertEquals("Buy milk", cleared.title);
         store.complete(task.id);
         assertThrows(IllegalArgumentException.class, () -> store.updateTiming(task.id, due, 0, 0));
+    }
+
+    @Test public void mainScreenAddsTaskWithOnlyATitle() {
+        try (org.robolectric.android.controller.ActivityController<MainActivity> controller =
+                     Robolectric.buildActivity(MainActivity.class).setup()) {
+            View root = controller.get().getWindow().getDecorView();
+            EditText entry = findEntry(root);
+            assertNotNull(entry);
+            entry.setText("Quick untimed task");
+            findText(root, "+  Add task").performClick();
+            assertEquals(1, store.activePersonal().size());
+            assertEquals(0, store.activePersonal().get(0).dueAt);
+            assertNotNull(findText(root, "No time · Add time"));
+        }
+    }
+
+    private static TextView findText(View view, String text) {
+        if (view instanceof TextView && text.contentEquals(((TextView) view).getText())) return (TextView) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                TextView found = findText(group.getChildAt(i), text);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static EditText findEntry(View view) {
+        if (view instanceof EditText) return (EditText) view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                EditText found = findEntry(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     @Test public void shiftsHaveNoPresetsAndUseUserHours() {

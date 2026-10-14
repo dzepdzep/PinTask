@@ -495,7 +495,8 @@ public final class ShiftActivity extends Activity {
         startBox.addView(startButton, new LinearLayout.LayoutParams(-1, dp(46)));
         startButton.setOnClickListener(v -> startShift());
 
-        root.addView(text("CREATE CUSTOM SHIFT", 12, ACCENT, true), spaced(0, 9));
+        TextView customHeading = text("CREATE YOUR OWN SHIFT", 12, ACCENT, true);
+        root.addView(customHeading, spaced(0, 9));
         LinearLayout custom = panel();
         root.addView(custom, spaced(0, 22));
         templateName = input("Name, e.g. Early shift");
@@ -526,6 +527,12 @@ public final class ShiftActivity extends Activity {
         Button create = button("+  Save new template", SURFACE, ACCENT);
         custom.addView(create, new LinearLayout.LayoutParams(-1, dp(46)));
         create.setOnClickListener(v -> addTemplate());
+
+        // Make setup discoverable before the empty template selector on a new installation.
+        root.removeView(customHeading);
+        root.removeView(custom);
+        root.addView(customHeading, 3, spaced(0, 9));
+        root.addView(custom, 4, spaced(0, 22));
 
         root.addView(text("Reminders are best-effort Android notifications, not guaranteed exact alarms. " +
                 "Don't rely on PinTask alone for time-critical patient care.", 12, MUTED, false));
