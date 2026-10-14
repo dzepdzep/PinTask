@@ -43,6 +43,10 @@ public class QualityOfLifeTest {
         TaskNotifications.cancel(context,plain.id);
         TaskNotifications.show(context,store.snooze(plain.id,snooze));
         assertNull(Shadows.shadowOf(context.getSystemService(NotificationManager.class)).getNotification((int)plain.id));
+        store.getWritableDatabase().execSQL("UPDATE tasks SET snoozed_until="+(System.currentTimeMillis()-1000)+" WHERE _id="+plain.id);
+        TaskNotifications.show(context,store.find(plain.id));
+        assertEquals(TaskNotifications.REMINDER_CHANNEL,Shadows.shadowOf(context.getSystemService(NotificationManager.class))
+                .getNotification((int)plain.id).getChannelId());
         store.updateTiming(task.id,due,0,0);
         assertEquals(0,store.find(task.id).snoozedUntil);
     }

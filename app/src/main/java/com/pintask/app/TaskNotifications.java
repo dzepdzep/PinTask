@@ -100,7 +100,7 @@ public final class TaskNotifications {
         if (task.dueAt > 0) detail += "  ·  Due " + DateFormat.getDateTimeInstance(
                 DateFormat.SHORT, DateFormat.SHORT).format(new Date(task.dueAt));
         // Use the reminder channel for scheduled arrivals, so the first notification alerts.
-        String channel = task.notifyBeforeMinutes >= 0 && task.dueAt > 0
+        String channel = task.snoozedUntil > 0 || (task.notifyBeforeMinutes >= 0 && task.dueAt > 0)
                 ? REMINDER_CHANNEL : CHANNEL;
         Notification notification = new Notification.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_pin)
