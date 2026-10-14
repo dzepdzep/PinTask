@@ -1,0 +1,6 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:background="#18202B" android:padding="12dp">
+    <TextView android:id="@+id/widget_title" android:layout_width="match_parent" android:layout_height="40dp" android:text="PinTask" android:textColor="#AFF18A" android:textSize="18sp" android:gravity="center_vertical" />
+    <Button android:id="@+id/widget_add" android:layout_width="match_parent" android:layout_height="48dp" android:text="+ Add task" />
+    <LinearLayout android:id="@+id/widget_tasks" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+    <TextView android:id="@+id/widget_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#96A3B3" android:textSize="12sp" />
+</LinearLayout>

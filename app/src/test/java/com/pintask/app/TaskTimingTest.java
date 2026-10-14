@@ -191,8 +191,8 @@ public class TaskTimingTest {
             assertNotNull(findText(root, "✓  Finish this"));
             findText(root, "⋮").performClick();
             android.widget.PopupMenu popup = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
-            assertEquals("Repeat now", popup.getMenu().getItem(0).getTitle());
-            assertEquals("Repeat at a chosen time…", popup.getMenu().getItem(1).getTitle());
+            assertEquals("Repeat now", popup.getMenu().getItem(1).getTitle());
+            assertEquals("Repeat at a chosen time…", popup.getMenu().getItem(2).getTitle());
         }
     }
 }

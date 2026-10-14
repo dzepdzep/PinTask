@@ -48,6 +48,7 @@ public final class ShiftActivity extends Activity {
     private TextView newStartView, newEndView, stepTimeView, selectedTemplateView, dateView;
     private LinearLayout stepsArea, currentArea, doneArea;
     private int doneLimit = 20;
+    private UndoBar undoBar;
     private int newStart = -1, newEnd = -1, stepClock = -1;
     private final Calendar selectedDate = Calendar.getInstance();
     private long selectedTemplateId = -1;
@@ -276,6 +277,7 @@ public final class ShiftActivity extends Activity {
                         if (completed != null) {
                             ReminderScheduler.cancel(this, task.id);
                             TaskNotifications.cancel(this, task.id);
+                            undoBar.offer(task.id,this::refreshCurrentRun);
                         }
                     }
                     refreshCurrentRun();
@@ -446,6 +448,8 @@ public final class ShiftActivity extends Activity {
         root.addView(text("YOUR CURRENT SHIFT", 12, ACCENT, true), spaced(0, 9));
         currentArea = panel();
         root.addView(currentArea, spaced(0, 22));
+        undoBar = new UndoBar(this);
+        root.addView(undoBar,spaced(0,9));
 
         root.addView(text("DONE · SHIFT HISTORY", 12, ACCENT, true), spaced(0, 9));
         doneArea = panel();
@@ -459,6 +463,20 @@ public final class ShiftActivity extends Activity {
         Button editHours = button("Edit selected shift hours", SURFACE, ACCENT);
         root.addView(editHours, spaced(0, 12));
         editHours.setOnClickListener(v -> editShiftHours());
+        Button duplicate = button("Duplicate selected shift",SURFACE,ACCENT);
+        root.addView(duplicate,spaced(0,12));
+        duplicate.setOnClickListener(v -> {
+            ShiftRepository.Template template = selectedTemplate();
+            if (template == null) { show("Create a shift first"); return; }
+            EditText name = input("New shift name"); name.setText(template.name + " copy");
+            AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Duplicate shift").setView(name)
+                    .setNegativeButton("Cancel",null).setPositiveButton("Duplicate",null).create();
+            dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
+                try { ShiftRepository.Template copy=repository.duplicateTemplate(template.id,name.getText().toString());
+                    refreshTemplates(copy.id); dialog.dismiss(); show("Copied. You can now edit its hours and tasks.");
+                } catch (IllegalArgumentException e) { name.setError(e.getMessage()); }
+            })); dialog.show();
+        });
         templateSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 if (position < templates.size()) {

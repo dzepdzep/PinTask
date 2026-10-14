@@ -17,6 +17,10 @@ final class TaskActions {
 
     static void show(Activity activity, View anchor, TaskStore.Task task, Runnable refresh) {
         PopupMenu menu = new PopupMenu(activity, anchor);
+        item(menu, "Save as favorite", () -> {
+            try (TaskStore store = new TaskStore(activity)) { store.saveFavorite(task.id); }
+            Toast.makeText(activity,"Saved as a reusable untimed task",Toast.LENGTH_SHORT).show();
+        });
         if (task.done) {
             item(menu, task.shiftRunId > 0 ? "Repeat as a personal task" : "Repeat now", () -> change(activity, refresh,
                     store -> store.repeat(task.id, 0, TaskStore.REPEAT_NEVER, -1)));
@@ -32,8 +36,8 @@ final class TaskActions {
                     store.stopRepeating(task.id); return store.find(task.id);
                 }));
             }
-            item(menu, "Remind me in 15 minutes", () -> change(activity, refresh, store ->
-                    store.updateTiming(task.id, System.currentTimeMillis() + 900_000, task.recurrence, 0)));
+            item(menu, "Snooze…", () -> activity.startActivity(new android.content.Intent(activity,SnoozeActivity.class)
+                    .putExtra(TaskNotifications.EXTRA_ID,task.id)));
             item(menu, "Change priority…", () -> new AlertDialog.Builder(activity).setTitle("Priority")
                     .setItems(new String[]{"Low", "Normal", "High"}, (d, which) ->
                             change(activity, refresh, store -> store.changePriority(task.id, which))).show());

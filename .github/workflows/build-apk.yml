@@ -26,8 +26,22 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Assemble debug APK
-        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      - name: Restore permanent signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.PINTASK_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/pintask-release.p12"
+      - name: Test and assemble signed APK
+        env:
+          PINTASK_KEYSTORE_PATH: ${{ runner.temp }}/pintask-release.p12
+          PINTASK_KEYSTORE_PASSWORD: ${{ secrets.PINTASK_KEYSTORE_PASSWORD }}
+        run: gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
+      - name: Verify APK signature
+        run: "$ANDROID_HOME/build-tools/35.0.0/apksigner verify --verbose app/build/outputs/apk/release/app-release.apk"
+      - name: Remove signing key from runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/pintask-release.p12"
       - name: Check shift time calculations
         run: |
           javac -d /tmp/pintask-tests app/src/main/java/com/pintask/app/ShiftTimes.java tests/ShiftTimesTest.java
@@ -35,6 +49,6 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: PinTask-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: PinTask-installable-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

@@ -10,8 +10,8 @@ android {
         applicationId 'com.pintask.app'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '1.5'
+        versionCode 7
+        versionName '1.6'
     }
 
     compileOptions {
@@ -21,6 +21,17 @@ android {
     testOptions {
         unitTests.includeAndroidResources = true
     }
+    signingConfigs {
+        release {
+            if (System.getenv('PINTASK_KEYSTORE_PATH')) {
+                storeFile file(System.getenv('PINTASK_KEYSTORE_PATH'))
+                storePassword System.getenv('PINTASK_KEYSTORE_PASSWORD')
+                keyAlias 'pintask'
+                keyPassword System.getenv('PINTASK_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+    buildTypes { release { signingConfig signingConfigs.release } }
 }
 
 dependencies {

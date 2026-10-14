@@ -2,6 +2,7 @@ package com.pintask.app;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Context;
@@ -59,6 +60,9 @@ public final class MainActivity extends Activity {
     private LinearLayout warningContainer;
     private TextView countView;
     private TextView completedHeader;
+    private EditText search;
+    private Spinner filter;
+    private UndoBar undoBar;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -170,12 +174,17 @@ public final class MainActivity extends Activity {
             }
         }
         refresh();
+        if (completion != null) undoBar.offer(task.id,this::refresh);
     }
 
     private void refresh() {
         if (activeContainer == null) return;
-        List<TaskStore.Task> active = store.activePersonal();
-        List<TaskStore.Task> recent = store.completedPersonal(doneLimit);
+        TaskWidget.refreshAll(this);
+        String query = search == null ? "" : search.getText().toString();
+        int selectedFilter = filter == null ? 0 : filter.getSelectedItemPosition();
+        List<TaskStore.Task> active = TaskFilters.apply(store.activePersonal(),query,selectedFilter,System.currentTimeMillis());
+        List<TaskStore.Task> allDone = TaskFilters.apply(store.completedPersonal(Integer.MAX_VALUE),query,selectedFilter,System.currentTimeMillis());
+        List<TaskStore.Task> recent = allDone.subList(0,Math.min(doneLimit,allDone.size()));
         countView.setText(active.size() + (active.size() == 1 ? " task" : " tasks"));
         activeContainer.removeAllViews();
         completedContainer.removeAllViews();
@@ -197,7 +206,7 @@ public final class MainActivity extends Activity {
             empty.setPadding(dp(18), dp(24), dp(18), dp(24));
             empty.setBackground(outline(SURFACE, 18, BORDER));
             empty.addView(makeText("✓", 26, ACCENT, true));
-            empty.addView(makeText("All clear.", 20, WHITE, true));
+            empty.addView(makeText(query.isEmpty() && selectedFilter == 0 ? "All clear." : "No matching tasks", 20, WHITE, true));
             TextView sub = makeText("Add a task above and it appears in your notifications.", 13, MUTED, false);
             sub.setPadding(0, dp(5), 0, 0);
             empty.addView(sub);
@@ -205,7 +214,7 @@ public final class MainActivity extends Activity {
         } else {
             for (TaskStore.Task task : active) activeContainer.addView(taskRow(task));
         }
-        int completedCount = store.completedPersonalCount();
+        int completedCount = allDone.size();
         completedHeader.setText("DONE  ·  " + completedCount);
         completedHeader.setVisibility(View.VISIBLE);
         completedContainer.setVisibility(View.VISIBLE);
@@ -248,6 +257,7 @@ public final class MainActivity extends Activity {
             meta += task.recurrence == TaskStore.REPEAT_DAILY ? " · Daily" :
                     task.recurrence == TaskStore.REPEAT_WEEKLY ? " · Weekly" : " · Monthly";
         }
+        if (task.snoozedUntil > System.currentTimeMillis()) meta += " · Snoozed until " + dateLabel(task.snoozedUntil);
         TextView info = makeText(meta, 11, MUTED, false);
         info.setPadding(0, dp(5), 0, 0);
         details.addView(info);
@@ -322,6 +332,12 @@ public final class MainActivity extends Activity {
         shiftNav.bottomMargin = dp(16);
         body.addView(shiftMode, shiftNav);
         shiftMode.setOnClickListener(v -> startActivity(new Intent(this, ShiftActivity.class)));
+        Button favorites = makeButton("★ Favorites", SURFACE, ACCENT);
+        body.addView(favorites,new LinearLayout.LayoutParams(-1,dp(48)));
+        favorites.setOnClickListener(v -> showFavorites(false));
+        Button backup = makeButton("Backup & restore", SURFACE, WHITE);
+        body.addView(backup,new LinearLayout.LayoutParams(-1,dp(48)));
+        backup.setOnClickListener(v -> startActivity(new Intent(this,BackupActivity.class)));
 
         LinearLayout compose = new LinearLayout(this);
         compose.setOrientation(LinearLayout.VERTICAL);
@@ -409,6 +425,24 @@ public final class MainActivity extends Activity {
         compose.addView(add, new LinearLayout.LayoutParams(-1, dp(48)));
         add.setOnClickListener(v -> addTask());
 
+        search = new EditText(this);
+        search.setSingleLine(true); search.setHint("Search tasks and Done history");
+        search.setTextColor(WHITE); search.setHintTextColor(MUTED);
+        body.addView(search,new LinearLayout.LayoutParams(-1,dp(48)));
+        filter = makeSpinner(new String[]{"All tasks", "Overdue", "Today", "No time", "High priority", "Normal priority", "Low priority"},0);
+        body.addView(filter,new LinearLayout.LayoutParams(-1,dp(48)));
+        search.addTextChangedListener(new android.text.TextWatcher() {
+            public void beforeTextChanged(CharSequence s,int start,int count,int after) {}
+            public void onTextChanged(CharSequence s,int start,int before,int count) { doneLimit=20; refresh(); }
+            public void afterTextChanged(android.text.Editable e) {}
+        });
+        filter.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            public void onItemSelected(android.widget.AdapterView<?> parent,View v,int position,long id) { doneLimit=20; refresh(); }
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+        undoBar = new UndoBar(this);
+        body.addView(undoBar,new LinearLayout.LayoutParams(-1,-2));
+
         warningContainer = new LinearLayout(this);
         warningContainer.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams warn = new LinearLayout.LayoutParams(-1, -2);
@@ -451,6 +485,29 @@ public final class MainActivity extends Activity {
             case 6: return 60;
             default: return -1;
         }
+    }
+
+    private void showFavorites(boolean remove) {
+        List<TaskStore.Task> saved = store.favorites();
+        if (saved.isEmpty()) {
+            new AlertDialog.Builder(this).setTitle("Favorites").setMessage("Use a task's ⋮ menu → Save as favorite. Add it again here with one tap, without a time.")
+                    .setPositiveButton("OK",null).show(); return;
+        }
+        String[] names = new String[saved.size()];
+        for (int i=0;i<saved.size();i++) names[i]=saved.get(i).title;
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle(remove ? "Remove a favorite" : "Tap a favorite to add it")
+                .setItems(names,(d,index)->{
+                    if (remove) {
+                        new AlertDialog.Builder(this).setTitle("Remove favorite?")
+                                .setMessage("Existing tasks stay unchanged.").setNegativeButton("Cancel",null)
+                                .setPositiveButton("Remove",(confirm,w)->store.removeFavorite(saved.get(index).id)).show();
+                    } else {
+                        TaskNotifications.show(this,store.addFavorite(saved.get(index).id)); refresh();
+                        Toast.makeText(this,"Added without a time",Toast.LENGTH_SHORT).show();
+                    }
+                }).setNegativeButton("Close",null);
+        if (!remove) dialog.setNeutralButton("Manage favorites",(d,w)->showFavorites(true));
+        dialog.show();
     }
 
     private TextView makeText(String value, int size, int color, boolean bold) {

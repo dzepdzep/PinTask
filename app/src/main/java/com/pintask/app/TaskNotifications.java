@@ -20,6 +20,7 @@ public final class TaskNotifications {
     public static final String CHANNEL = "unfinished_tasks";
     public static final String REMINDER_CHANNEL = "due_reminders_v2";
     public static final String ACTION_DONE = "com.pintask.app.ACTION_DONE";
+    public static final String ACTION_UNDO = "com.pintask.app.ACTION_UNDO";
     public static final String ACTION_DISMISSED = "com.pintask.app.ACTION_DISMISSED";
     public static final String ACTION_REMINDER = "com.pintask.app.ACTION_REMINDER";
     public static final String ACTION_QUICK_ADD = "com.pintask.app.ACTION_QUICK_ADD";
@@ -74,8 +75,17 @@ public final class TaskNotifications {
                 priority == TaskStore.PRIORITY_LOW ? "Low priority" : "Normal priority";
     }
 
+    private static Notification.Action snoozeAction(Context context, long id) {
+        Intent intent = new Intent(context, SnoozeActivity.class).putExtra(EXTRA_ID,id);
+        PendingIntent pending = PendingIntent.getActivity(context,(int)id,intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return new Notification.Action.Builder(Icon.createWithResource(context,R.drawable.ic_pin),"Snooze",pending).build();
+    }
+
     public static void show(Context context, TaskStore.Task task) {
+        TaskWidget.refreshAll(context);
         if (task == null || task.done || !canNotify(context)) return;
+        if (task.snoozedUntil > System.currentTimeMillis()) return;
         if (task.dueAt == 0 && task.shiftRunId > 0 && System.currentTimeMillis() < task.notificationAt()) return;
         // Scheduled tasks appear only when their selected advance interval begins.
         if (task.dueAt > 0 && task.notifyBeforeMinutes >= 0 &&
@@ -105,7 +115,7 @@ public final class TaskNotifications {
                 .setOnlyAlertOnce(true)
                 .setShowWhen(true)
                 .setWhen(task.createdAt)
-                .addAction(doneAction(context, task.id)).build();
+                .addAction(doneAction(context, task.id)).addAction(snoozeAction(context, task.id)).build();
         // Android 14+ permits individual dismissal despite these flags.
         notification.flags |= Notification.FLAG_NO_CLEAR;
         context.getSystemService(NotificationManager.class).notify((int) task.id, notification);
@@ -121,9 +131,21 @@ public final class TaskNotifications {
                 .setContentIntent(open(context))
                 .setCategory(Notification.CATEGORY_REMINDER)
                 .setAutoCancel(true)
-                .addAction(doneAction(context, task.id)).build();
+                .addAction(doneAction(context, task.id)).addAction(snoozeAction(context, task.id)).build();
         context.getSystemService(NotificationManager.class)
                 .notify(REMINDER_OFFSET + (int) task.id, notification);
+    }
+
+    public static void showUndo(Context context,long id) {
+        if(!canNotify(context)) return;
+        ensureChannel(context);
+        Intent intent=new Intent(context,TaskActionReceiver.class).setAction(ACTION_UNDO).putExtra(EXTRA_ID,id);
+        PendingIntent undo=PendingIntent.getBroadcast(context,(int)id,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Notification notification=new Notification.Builder(context,CHANNEL).setSmallIcon(R.drawable.ic_check)
+                .setContentTitle("Task completed").setContentText("Undo is available for 10 seconds")
+                .setTimeoutAfter(10_000).setContentIntent(open(context))
+                .addAction(new Notification.Action.Builder(Icon.createWithResource(context,R.drawable.ic_pin),"Undo",undo).build()).build();
+        context.getSystemService(NotificationManager.class).notify("undo",(int)id,notification);
     }
 
     public static void showQuickAdd(Context context) {
@@ -164,9 +186,11 @@ public final class TaskNotifications {
     }
 
     public static void cancel(Context context, long id) {
+        TaskWidget.refreshAll(context);
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
         manager.cancel((int) id);
+        manager.cancel("undo",(int)id);
         manager.cancel(REMINDER_OFFSET + (int) id);
     }
 }

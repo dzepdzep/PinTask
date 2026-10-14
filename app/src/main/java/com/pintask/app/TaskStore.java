@@ -21,7 +21,7 @@ public final class TaskStore extends SQLiteOpenHelper {
     public static final int REPEAT_MONTHLY = 3;
 
     public TaskStore(Context context) {
-        super(context.getApplicationContext(), "pintask.db", null, 4);
+        super(context.getApplicationContext(), "pintask.db", null, 5);
     }
 
     @Override public void onCreate(SQLiteDatabase db) {
@@ -37,8 +37,11 @@ public final class TaskStore extends SQLiteOpenHelper {
                 "reminded_at INTEGER NOT NULL DEFAULT 0," +
                 "notify_before_min INTEGER NOT NULL DEFAULT -1," +
                 "shift_run_id INTEGER NOT NULL DEFAULT 0," +
-                "shift_label TEXT NOT NULL DEFAULT '')");
+                "shift_label TEXT NOT NULL DEFAULT ''," +
+                "snoozed_until INTEGER NOT NULL DEFAULT 0," +
+                "next_task_id INTEGER NOT NULL DEFAULT 0)");
         ShiftRepository.createTables(db);
+        createFavorites(db);
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
@@ -57,6 +60,15 @@ public final class TaskStore extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE tasks ADD COLUMN shift_label TEXT NOT NULL DEFAULT ''");
             ShiftRepository.createTables(db);
         }
+        if (oldVersion < 5) {
+            db.execSQL("ALTER TABLE tasks ADD COLUMN snoozed_until INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE tasks ADD COLUMN next_task_id INTEGER NOT NULL DEFAULT 0");
+            createFavorites(db);
+        }
+    }
+
+    private static void createFavorites(SQLiteDatabase db) {
+        db.execSQL("CREATE TABLE favorites (_id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, priority INTEGER NOT NULL DEFAULT 1)");
     }
 
     public synchronized Task add(String title) {
@@ -123,6 +135,7 @@ public final class TaskStore extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put("due_at", dueAt);
         if (task.shiftRunId > 0 && dueAt == 0) values.put("created_at", availableAt);
+        values.put("snoozed_until", 0);
         values.put("recurrence", dueAt == 0 || task.shiftRunId > 0 ? REPEAT_NEVER : recurrence);
         values.put("notify_before_min", dueAt == 0 ? -1 : early);
         values.put("reminded_at", 0);
@@ -164,6 +177,8 @@ public final class TaskStore extends SQLiteOpenHelper {
         values.put("done", 0);
         values.put("completed_at", 0);
         values.put("due_at", 0);
+        values.put("snoozed_until", 0);
+        values.put("next_task_id", 0);
         values.put("notify_before_min", -1);
         values.put("reminded_at", 0);
         getWritableDatabase().update("tasks", values, "_id=? AND done=1", new String[]{Long.toString(id)});
@@ -178,6 +193,85 @@ public final class TaskStore extends SQLiteOpenHelper {
         ContentValues values = new ContentValues();
         values.put("recurrence", REPEAT_NEVER);
         getWritableDatabase().update("tasks", values, "_id=? AND done=0", new String[]{Long.toString(id)});
+    }
+
+    public synchronized Task snooze(long id, long until) {
+        Task task = find(id);
+        if (task == null || task.done) throw new IllegalArgumentException("Task is no longer active");
+        if (until <= System.currentTimeMillis()) throw new IllegalArgumentException("Choose a future time");
+        if (task.shiftRunId > 0) {
+            try (Cursor c = getReadableDatabase().rawQuery("SELECT started_at,ends_at FROM shift_runs WHERE _id=? AND ended=0",
+                    new String[]{Long.toString(task.shiftRunId)})) {
+                if (!c.moveToFirst() || until < c.getLong(0) || until >= c.getLong(1))
+                    throw new IllegalArgumentException("Snooze must stay inside the shift");
+            }
+        }
+        ContentValues values = new ContentValues();
+        values.put("snoozed_until", until);
+        values.put("reminded_at", 0);
+        getWritableDatabase().update("tasks", values, "_id=? AND done=0", new String[]{Long.toString(id)});
+        return find(id);
+    }
+
+    public synchronized long saveFavorite(long id) {
+        Task task = find(id);
+        if (task == null) throw new IllegalArgumentException("Task no longer exists");
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT _id FROM favorites WHERE title=? AND priority=?",
+                new String[]{task.title, Integer.toString(task.priority)})) { if (c.moveToFirst()) return c.getLong(0); }
+        ContentValues values = new ContentValues();
+        values.put("title", task.title); values.put("priority", task.priority);
+        return getWritableDatabase().insertOrThrow("favorites", null, values);
+    }
+
+    public synchronized List<Task> favorites() {
+        List<Task> result = new ArrayList<>();
+        try (Cursor c = getReadableDatabase().rawQuery("SELECT _id,title,priority FROM favorites ORDER BY title COLLATE NOCASE", null)) {
+            while (c.moveToNext()) result.add(new Task(c.getLong(0), c.getString(1), 0, false, 0, c.getInt(2), 0, 0, 0, -1, 0, ""));
+        }
+        return result;
+    }
+
+    public synchronized Task addFavorite(long id) {
+        for (Task favorite : favorites()) if (favorite.id == id) return add(favorite.title, favorite.priority, 0, 0, -1);
+        throw new IllegalArgumentException("Favorite no longer exists");
+    }
+
+    public synchronized void removeFavorite(long id) {
+        getWritableDatabase().delete("favorites", "_id=?", new String[]{Long.toString(id)});
+    }
+
+    /** Brief undo, including removal of the automatically generated next occurrence. */
+    public synchronized long undoCompletion(long id) {
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            Task original = findIn(db, id);
+            if (original == null || !original.done || original.completedAt == 0 ||
+                    System.currentTimeMillis() - original.completedAt > 10_000)
+                throw new IllegalArgumentException("Undo expired. Use the Done menu instead");
+            if (original.shiftRunId > 0) {
+                try (Cursor c = db.rawQuery("SELECT ended FROM shift_runs WHERE _id=?", new String[]{Long.toString(original.shiftRunId)})) {
+                    if (!c.moveToFirst() || c.getInt(0) != 0) throw new IllegalArgumentException("This shift has ended");
+                }
+            }
+            long nextId;
+            try (Cursor c = db.rawQuery("SELECT next_task_id FROM tasks WHERE _id=?", new String[]{Long.toString(id)})) {
+                c.moveToFirst(); nextId = c.getLong(0);
+            }
+            if (nextId > 0) {
+                Task next = findIn(db, nextId);
+                if (next == null || next.done || !next.title.equals(original.title) || next.priority != original.priority ||
+                        next.recurrence != original.recurrence || next.snoozedUntil != 0 || next.notifyBeforeMinutes != original.notifyBeforeMinutes ||
+                        next.dueAt != advancePast(original.dueAt, original.recurrence, original.completedAt))
+                    throw new IllegalArgumentException("The next occurrence has changed; undo is unavailable");
+                db.delete("tasks", "_id=?", new String[]{Long.toString(nextId)});
+            }
+            ContentValues values = new ContentValues();
+            values.put("done", 0); values.put("completed_at", 0); values.put("next_task_id", 0);
+            db.update("tasks", values, "_id=? AND done=1", new String[]{Long.toString(id)});
+            db.setTransactionSuccessful();
+            return nextId;
+        } finally { db.endTransaction(); }
     }
 
     /** Idempotently completes the task, optionally creating its next occurrence. */
@@ -206,6 +300,9 @@ public final class TaskStore extends SQLiteOpenHelper {
                         nextDue, original.recurrence, original.notifyBeforeMinutes, 0, "");
                 next = new Task(nextId, original.title, now, false, 0, original.priority,
                         nextDue, original.recurrence, 0, original.notifyBeforeMinutes, 0, "");
+                ContentValues link = new ContentValues();
+                link.put("next_task_id", nextId);
+                db.update("tasks", link, "_id=?", new String[]{Long.toString(id)});
             }
             db.setTransactionSuccessful();
             return new Completion(original, next);
@@ -232,7 +329,7 @@ public final class TaskStore extends SQLiteOpenHelper {
         db.beginTransaction();
         try {
             Task task = findIn(db, id);
-            if (task == null || task.done || (task.dueAt <= 0 && task.shiftRunId == 0) ||
+            if (task == null || task.done || (task.dueAt <= 0 && task.shiftRunId == 0 && task.snoozedUntil == 0) ||
                     task.notificationAt() > System.currentTimeMillis() || task.remindedAt != 0) {
                 db.setTransactionSuccessful();
                 return null;
@@ -305,7 +402,7 @@ public final class TaskStore extends SQLiteOpenHelper {
     }
 
     static Task read(Cursor cursor) {
-        return new Task(
+        Task task = new Task(
                 cursor.getLong(cursor.getColumnIndexOrThrow("_id")),
                 cursor.getString(cursor.getColumnIndexOrThrow("title")),
                 cursor.getLong(cursor.getColumnIndexOrThrow("created_at")),
@@ -318,6 +415,8 @@ public final class TaskStore extends SQLiteOpenHelper {
                 cursor.getInt(cursor.getColumnIndexOrThrow("notify_before_min")),
                 cursor.getLong(cursor.getColumnIndexOrThrow("shift_run_id")),
                 cursor.getString(cursor.getColumnIndexOrThrow("shift_label")));
+        task.snoozedUntil = cursor.getLong(cursor.getColumnIndexOrThrow("snoozed_until"));
+        return task;
     }
 
     public static final class Task {
@@ -334,6 +433,7 @@ public final class TaskStore extends SQLiteOpenHelper {
         public final int notifyBeforeMinutes;
         public final long shiftRunId;
         public final String shiftLabel;
+        public long snoozedUntil;
 
         Task(long id, String title, long createdAt, boolean done, long completedAt,
                 int priority, long dueAt, int recurrence, long remindedAt, int notifyBeforeMinutes,
@@ -353,6 +453,7 @@ public final class TaskStore extends SQLiteOpenHelper {
         }
 
         public long notificationAt() {
+            if (snoozedUntil > 0) return snoozedUntil;
             if (dueAt == 0 && shiftRunId > 0) return createdAt;
             return dueAt - Math.max(0, notifyBeforeMinutes) * 60_000L;
         }

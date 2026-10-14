@@ -16,6 +16,7 @@ public final class BootReceiver extends BroadcastReceiver {
                 Intent.ACTION_TIMEZONE_CHANGED.equals(action)) {
             TaskNotifications.syncAll(context);
             ReminderScheduler.rescheduleAll(context);
+            TaskWidget.refreshAll(context);
         }
     }
 }

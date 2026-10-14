@@ -39,7 +39,15 @@ public final class TaskActionReceiver extends BroadcastReceiver {
                     TaskNotifications.show(context, completion.nextTask);
                     ReminderScheduler.schedule(context, completion.nextTask);
                 }
+                if(completion != null) TaskNotifications.showUndo(context,id);
             }
+        } else if (TaskNotifications.ACTION_UNDO.equals(action)) {
+            try(TaskStore store=new TaskStore(context)) {
+                long next=store.undoCompletion(id);
+                if(next>0) { ReminderScheduler.cancel(context,next); TaskNotifications.cancel(context,next); }
+                TaskNotifications.cancel(context,id);
+                TaskNotifications.show(context,store.find(id)); ReminderScheduler.schedule(context,store.find(id));
+            } catch(IllegalArgumentException e) { android.widget.Toast.makeText(context,e.getMessage(),android.widget.Toast.LENGTH_LONG).show(); }
         } else if (TaskNotifications.ACTION_DISMISSED.equals(action)) {
             // Best effort only: OS or OEM battery management can prevent re-posting.
             PendingResult pending = goAsync();

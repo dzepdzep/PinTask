@@ -90,6 +90,17 @@ public final class ShiftRepository implements AutoCloseable {
         return result;
     }
 
+    public Template duplicateTemplate(long id,String name) {
+        Template source = findTemplate(id);
+        if (source == null) throw new IllegalArgumentException("Choose a shift template");
+        SQLiteDatabase db = store.getWritableDatabase(); db.beginTransaction();
+        try {
+            Template copy = addTemplate(name,source.startMinute,source.endMinute());
+            for (Step step : steps(id)) addStep(copy.id,step.title,step.firstMinute,step.everyMinute,step.priority,step.notifyBeforeMinutes);
+            db.setTransactionSuccessful(); return copy;
+        } finally { db.endTransaction(); }
+    }
+
     public void addStep(long templateId, String title, int firstMinute, int everyMinute,
             int priority, int earlyMinute) {
         Template t = findTemplate(templateId);
