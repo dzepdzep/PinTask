@@ -153,6 +153,7 @@ public final class TaskNotifications {
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle("Due now: " + task.title)
                 .setContentText("Your scheduled PinTask reminder")
+                .setOnlyAlertOnce(true)
                 .setContentIntent(open(context,task.id))
                 .setCategory(Notification.CATEGORY_REMINDER)
                 .setAutoCancel(true)
