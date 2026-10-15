@@ -61,24 +61,35 @@ public final class MainActivity extends Activity {
     private TextView countView;
     private TextView completedHeader;
     private EditText search;
+    private android.widget.Switch searchAll;
     private Spinner filter;
     private UndoBar undoBar;
+    private Button groupButton;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if(Intent.ACTION_MAIN.equals(getIntent().getAction()) && !getIntent().getBooleanExtra("search_all",false)) {
+            startActivity(new Intent(this,ShiftActivity.class));finish();return;
+        }
         store = new TaskStore(this);
         TaskNotifications.ensureChannel(this);
         makeScreen();
+        if(getIntent().getBooleanExtra("search_all",false)){searchAll.setChecked(true);search.requestFocus();}
         askNotificationPermission();
     }
 
     @Override protected void onResume() {
         super.onResume();
+        if(groupButton!=null) groupButton.setText(TaskGroups.label(this));
         refresh();
         TaskNotifications.syncAll(this);
         ReminderScheduler.rescheduleAll(this);
     }
 
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);setIntent(intent);
+        if(intent.getBooleanExtra("search_all",false)){searchAll.setChecked(true);search.requestFocus();search.requestRectangleOnScreen(new android.graphics.Rect(0,0,search.getWidth(),search.getHeight()),false);}
+    }
     @Override protected void onDestroy() {
         if (store != null) store.close();
         super.onDestroy();
@@ -135,7 +146,7 @@ public final class MainActivity extends Activity {
             entry.setError("Enter a task first");
             return;
         }
-        int repeat = repeatSpinner.getSelectedItemPosition();
+        int repeat = RepeatRules.selected(repeatSpinner);
         if (repeat != TaskStore.REPEAT_NEVER && selectedDueAt <= 0) {
             Toast.makeText(this, "Choose a reminder date and time for repeating tasks", Toast.LENGTH_LONG).show();
             chooseDate();
@@ -182,8 +193,9 @@ public final class MainActivity extends Activity {
         TaskWidget.refreshAll(this);
         String query = search == null ? "" : search.getText().toString();
         int selectedFilter = filter == null ? 0 : filter.getSelectedItemPosition();
-        List<TaskStore.Task> active = TaskFilters.apply(store.activePersonal(),query,selectedFilter,System.currentTimeMillis());
-        List<TaskStore.Task> allDone = TaskFilters.apply(store.completedPersonal(Integer.MAX_VALUE),query,selectedFilter,System.currentTimeMillis());
+        boolean global=searchAll!=null && searchAll.isChecked();
+        List<TaskStore.Task> active = TaskFilters.scoped(this,global?store.activeAll():store.activePersonal(),query,selectedFilter,global,System.currentTimeMillis());
+        List<TaskStore.Task> allDone = TaskFilters.scoped(this,global?store.completedAll():store.completedPersonal(Integer.MAX_VALUE),query,selectedFilter,global,System.currentTimeMillis());
         List<TaskStore.Task> recent = allDone.subList(0,Math.min(doneLimit,allDone.size()));
         countView.setText(active.size() + (active.size() == 1 ? " task" : " tasks"));
         activeContainer.removeAllViews();
@@ -244,9 +256,11 @@ public final class MainActivity extends Activity {
         TextView name = makeText(task.title, 15, WHITE, true);
         name.setMaxLines(2);
         name.setEllipsize(TextUtils.TruncateAt.END);
+        name.setOnClickListener(v->TaskDetails.open(this,task,this::refresh));
         details.addView(name);
-        String meta = task.priority == TaskStore.PRIORITY_HIGH ? "HIGH" :
-                task.priority == TaskStore.PRIORITY_LOW ? "LOW" : "NORMAL";
+        TextView extra=makeText(TaskDetails.summary(task),12,MUTED,false);if(!TaskDetails.summary(task).isEmpty())details.addView(extra);
+        String meta = (task.group.isEmpty()?"":task.group+" · ") + (task.priority == TaskStore.PRIORITY_HIGH ? "HIGH" :
+                task.priority == TaskStore.PRIORITY_LOW ? "LOW" : "NORMAL");
         if (task.dueAt > 0) {
             meta += " · " + dateLabel(task.dueAt);
             if (task.notifyBeforeMinutes >= 0) meta += " · " +
@@ -254,8 +268,7 @@ public final class MainActivity extends Activity {
                             task.notifyBeforeMinutes + " min before");
         }
         if (task.recurrence != TaskStore.REPEAT_NEVER) {
-            meta += task.recurrence == TaskStore.REPEAT_DAILY ? " · Daily" :
-                    task.recurrence == TaskStore.REPEAT_WEEKLY ? " · Weekly" : " · Monthly";
+            meta += " · "+RepeatRules.label(task.recurrence);
         }
         if (task.snoozedUntil > System.currentTimeMillis()) meta += " · Snoozed until " + dateLabel(task.snoozedUntil);
         TextView info = makeText(meta, 11, MUTED, false);
@@ -270,6 +283,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams doneParams = new LinearLayout.LayoutParams(dp(74), dp(43));
         doneParams.leftMargin = dp(9);
         row.addView(done, doneParams);
+        done.setEnabled(!task.paused);
         done.setOnClickListener(v -> complete(task));
         row.addView(TaskCards.overflow(this, task, this::refresh));
         return row;
@@ -341,6 +355,19 @@ public final class MainActivity extends Activity {
         navigation.addView(backup,new LinearLayout.LayoutParams(0,dp(48),1));
         backup.setOnClickListener(v -> startActivity(new Intent(this,BackupActivity.class)));
 
+        groupButton=makeButton(TaskGroups.label(this),SURFACE,ACCENT);
+        body.addView(groupButton);
+        groupButton.setOnClickListener(v->TaskGroups.choose(this,()->{groupButton.setText(TaskGroups.label(this));refresh();}));
+        Button bundles=makeButton("Task bundles",SURFACE,ACCENT);body.addView(bundles);
+        bundles.setOnClickListener(v->TaskBundles.show(this,this::refresh));
+        android.widget.Switch quick=new android.widget.Switch(this);
+        quick.setText("Persistent Quick Add notification"); quick.setTextColor(WHITE);
+        quick.setChecked(TaskNotifications.quickAddEnabled(this));
+        quick.setOnCheckedChangeListener((v,enabled)->{
+            TaskNotifications.setQuickAddEnabled(this,enabled);
+            if(enabled) askNotificationPermission();
+        }); body.addView(quick);
+
         LinearLayout compose = new LinearLayout(this);
         compose.setOrientation(LinearLayout.VERTICAL);
         compose.setPadding(dp(15), dp(14), dp(15), dp(15));
@@ -390,10 +417,16 @@ public final class MainActivity extends Activity {
         LinearLayout repeatBox = new LinearLayout(this);
         repeatBox.setOrientation(LinearLayout.VERTICAL);
         repeatBox.addView(makeText("REPEAT", 10, MUTED, true));
-        repeatSpinner = makeSpinner(new String[]{"Never", "Daily", "Weekly", "Monthly"}, 0);
+        repeatSpinner = new Spinner(this);
+        RepeatRules.bind(this,repeatSpinner,0);
         LinearLayout.LayoutParams repeatControl = new LinearLayout.LayoutParams(-1, dp(43));
         repeatControl.topMargin = dp(5);
         repeatBox.addView(repeatSpinner, repeatControl);
+        Button customRepeat=makeButton("Custom repeat…",SURFACE,ACCENT);
+        repeatBox.addView(customRepeat);
+        Button weekdays=makeButton("Selected weekdays…",SURFACE,ACCENT);repeatBox.addView(weekdays);
+        weekdays.setOnClickListener(v->RepeatRules.weekdays(this,RepeatRules.selected(repeatSpinner),code->RepeatRules.bind(this,repeatSpinner,code)));
+        customRepeat.setOnClickListener(v->RepeatRules.custom(this,RepeatRules.selected(repeatSpinner),code->RepeatRules.bind(this,repeatSpinner,code)));
         LinearLayout.LayoutParams halfLeft = new LinearLayout.LayoutParams(0, -2, 1);
         halfLeft.rightMargin = dp(8);
         selectors.addView(priorityBox, halfLeft);
@@ -427,6 +460,7 @@ public final class MainActivity extends Activity {
         compose.addView(add, new LinearLayout.LayoutParams(-1, dp(48)));
         add.setOnClickListener(v -> addTask());
 
+        searchAll=new android.widget.Switch(this);searchAll.setText("Search across all jobs, patients and shifts");searchAll.setTextColor(WHITE);body.addView(searchAll);searchAll.setOnCheckedChangeListener((v,checked)->refresh());
         search = new EditText(this);
         search.setSingleLine(true); search.setHint("Search tasks and Done history");
         search.setTextColor(WHITE); search.setHintTextColor(MUTED);

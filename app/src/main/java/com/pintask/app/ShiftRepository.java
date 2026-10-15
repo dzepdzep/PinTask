@@ -12,9 +12,11 @@ import java.util.List;
 /** Reusable shift templates with bounded, per-shift one-shot tasks. */
 public final class ShiftRepository implements AutoCloseable {
     private final TaskStore store;
+    private final Context context;
 
     public ShiftRepository(Context context) {
         store = new TaskStore(context);
+        this.context=context.getApplicationContext();
     }
 
     static void createTables(SQLiteDatabase db) {
@@ -30,7 +32,8 @@ public final class ShiftRepository implements AutoCloseable {
         db.execSQL("CREATE TABLE IF NOT EXISTS shift_runs (" +
                 "_id INTEGER PRIMARY KEY AUTOINCREMENT, template_id INTEGER NOT NULL," +
                 "label TEXT NOT NULL, started_at INTEGER NOT NULL, ends_at INTEGER NOT NULL," +
-                "ended INTEGER NOT NULL DEFAULT 0)");
+                "ended INTEGER NOT NULL DEFAULT 0," +
+                "task_group TEXT NOT NULL DEFAULT '')");
     }
 
     private static String[] args(long id) { return new String[]{Long.toString(id)}; }
@@ -160,19 +163,126 @@ public final class ShiftRepository implements AutoCloseable {
         store.getWritableDatabase().update("shift_templates", values, "_id=?", args(id));
     }
 
+    /** Only a shift actually in progress; future plans never hide tonight's ND. */
     public Run currentRun() {
-        try (Cursor c = store.getReadableDatabase().query("shift_runs", null, "ended=0",
-                null, null, null, "started_at DESC", "1")) {
+        long now = System.currentTimeMillis();
+        try (Cursor c = store.getReadableDatabase().query("shift_runs", null,
+                "ended=0 AND started_at<=? AND ends_at>? AND (template_id<>0 OR label NOT IN ('EZ','Off'))",
+                new String[]{""+now,""+now}, null, null, "started_at DESC", null)) {
+            while(c.moveToNext()) { Run run=readRun(c); if(TaskGroups.matches(context,run.group)) return run; }
+            return null;
+        }
+    }
+
+    public List<Run> runsForDate(java.time.LocalDate date) {
+        java.time.ZoneId zone = java.time.ZoneId.systemDefault();
+        long start = date.atStartOfDay(zone).toInstant().toEpochMilli();
+        long end = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
+        List<Run> result = new ArrayList<>();
+        try (Cursor c = store.getReadableDatabase().query("shift_runs", null,
+                "ended=0 AND started_at>=? AND started_at<?", new String[]{""+start,""+end},
+                null, null, "started_at ASC")) {
+            while (c.moveToNext()) { Run run=readRun(c); if(TaskGroups.matches(context,run.group)) result.add(run); }
+        }
+        return result;
+    }
+
+    public Run findRun(long id) {
+        try (Cursor c = store.getReadableDatabase().query("shift_runs", null,
+                "_id=? AND ended=0", args(id), null, null, null)) {
             return c.moveToFirst() ? readRun(c) : null;
         }
     }
 
+    /** Calendar choices need neither a template nor any tasks. Existing tasks are never removed. */
+    public Run schedule(java.time.LocalDate date, String label) {
+        int start, duration;
+        switch (label) {
+            case "TD": start=480; duration=720; break;
+            case "ND": start=1200; duration=720; break;
+            case "U8": start=480; duration=480; break;
+            case "EZ": case "Off": start=0; duration=1440; break;
+            default: throw new IllegalArgumentException("Choose a shift");
+        }
+        long starts = date.atTime(start/60,start%60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long ends = ShiftTimes.atMinuteOffset(starts, duration);
+        SQLiteDatabase db = store.getWritableDatabase();
+        db.beginTransaction();
+        try {
+            List<Run> existing = runsForDate(date);
+            existing.removeIf(run->!run.group.equals(TaskGroups.newTaskGroup(context)));
+            for (Run run : existing) {
+                if (existing.size()==1 && run.label.equals(label) && run.startsAt==starts && run.endsAt==ends) {
+                    db.setTransactionSuccessful(); return run;
+                }
+                if (!runTasks(run.id).isEmpty())
+                    throw new IllegalArgumentException("This day already has shift tasks. Keep it, or end that shift from Schedule first.");
+            }
+            if (!label.equals("EZ") && !label.equals("Off")) {
+                try (Cursor c = db.rawQuery("SELECT _id FROM shift_runs WHERE ended=0 AND (template_id<>0 OR label NOT IN ('EZ','Off')) AND started_at<? AND ends_at>?", new String[]{""+ends,""+starts})) {
+                    while(c.moveToNext()) {
+                        long id=c.getLong(0);
+                        boolean sameDay=false;
+                        for(Run run:existing) if(run.id==id) sameDay=true;
+                        if(!sameDay && findRun(id).group.equals(TaskGroups.newTaskGroup(context))) throw new IllegalArgumentException("This overlaps another scheduled shift");
+                    }
+                }
+            }
+            ContentValues closed=new ContentValues(); closed.put("ended",1);
+            for(Run run:existing) db.update("shift_runs",closed,"_id=?",args(run.id));
+            ContentValues values=new ContentValues();
+            values.put("template_id",0); values.put("label",label);
+            values.put("task_group",TaskGroups.newTaskGroup(context));
+            values.put("started_at",starts); values.put("ends_at",ends);
+            long id=db.insertOrThrow("shift_runs",null,values);
+            db.setTransactionSuccessful();
+            return findRun(id);
+        } finally { db.endTransaction(); }
+    }
+
+    /** Explicit occurrences stop at the shift end, including the morning after an ND. */
+    public void addTask(long runId, String title, int clockMinute, int every, int early) {
+        String name=title==null ? "" : title.trim();
+        if(name.isEmpty()) throw new IllegalArgumentException("Enter a task name");
+        if(clockMinute < -1 || clockMinute >=1440) throw new IllegalArgumentException("Invalid time");
+        if(every!=0 && every!=30 && every!=60 && every!=120 && every!=180 && every!=240)
+            throw new IllegalArgumentException("Unsupported repeat interval");
+        if(early!=-2 && early!=0 && early!=5 && early!=10 && early!=15 && early!=30 && early!=60)
+            throw new IllegalArgumentException("Unsupported reminder");
+        if(clockMinute<0 && (every!=0 || early!=-2)) throw new IllegalArgumentException("Choose a time for reminders or repeats");
+        SQLiteDatabase db=store.getWritableDatabase(); db.beginTransaction();
+        try {
+            Run run=findRun(runId);
+            long now=System.currentTimeMillis();
+            if(run==null || run.endsAt<=now || (run.templateId==0 && (run.label.equals("Off") || run.label.equals("EZ"))))
+                throw new IllegalArgumentException("Choose a working shift that has not ended");
+            List<Long> times=new ArrayList<>();
+            if(clockMinute<0) times.add(0L);
+            else {
+                java.time.ZoneId zone=java.time.ZoneId.systemDefault();
+                java.time.LocalDateTime start=java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(run.startsAt),zone);
+                java.time.LocalDateTime end=java.time.LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(run.endsAt),zone);
+                int duration=(int)java.time.Duration.between(start,end).toMinutes();
+                int offset=(clockMinute-start.getHour()*60-start.getMinute()+1440)%1440;
+                for(int minute:ShiftTimes.occurrenceOffsets(offset,every,duration)) {
+                    long due=ShiftTimes.atMinuteOffset(run.startsAt,minute);
+                    if(due<=now) throw new IllegalArgumentException("Choose a future time inside this shift");
+                    if(!times.contains(due)) times.add(due);
+                }
+            }
+            for(long due:times) { long id=TaskStore.insert(db,name.substring(0,Math.min(160,name.length())),
+                    due==0 ? Math.max(now,run.startsAt) : now,1,due,0,early,run.id,run.label); store.setGroup(id,run.group); }
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+    }
+
     private static Run readRun(Cursor c) {
-        return new Run(c.getLong(c.getColumnIndexOrThrow("_id")),
+        Run run=new Run(c.getLong(c.getColumnIndexOrThrow("_id")),
                 c.getLong(c.getColumnIndexOrThrow("template_id")),
                 c.getString(c.getColumnIndexOrThrow("label")),
                 c.getLong(c.getColumnIndexOrThrow("started_at")),
                 c.getLong(c.getColumnIndexOrThrow("ends_at")));
+        run.group=c.getString(c.getColumnIndexOrThrow("task_group")); return run;
     }
 
     public static long runStartForDate(Template template, int year, int month, int day) {
@@ -193,11 +303,15 @@ public final class ShiftRepository implements AutoCloseable {
         if (template == null) throw new IllegalArgumentException("Shift template not found");
         List<Step> rules = steps(templateId);
         if (rules.isEmpty()) throw new IllegalArgumentException("Add at least one shift task first");
-        if (currentRun() != null) throw new IllegalArgumentException("End your current shift first");
         if (startsAt <= 0) throw new IllegalArgumentException("Invalid shift start");
         long endsAt = ShiftTimes.atMinuteOffset(startsAt, template.durationMinutes);
         if (endsAt < System.currentTimeMillis())
             throw new IllegalArgumentException("This shift has already ended. Choose another date");
+        try (Cursor c=store.getReadableDatabase().rawQuery(
+                "SELECT _id FROM shift_runs WHERE ended=0 AND (template_id<>0 OR label NOT IN ('EZ','Off')) AND started_at<? AND ends_at>?",
+                new String[]{""+endsAt,""+startsAt})) {
+            if(c.moveToFirst()) throw new IllegalArgumentException("This overlaps another scheduled shift");
+        }
         // Resolve all occurrences first so invalid templates do not generate partial runs.
         List<Occurrence> planned = new ArrayList<>();
         long now = System.currentTimeMillis();
@@ -223,14 +337,16 @@ public final class ShiftRepository implements AutoCloseable {
         try {
             ContentValues values = new ContentValues();
             values.put("template_id", templateId);
+            values.put("task_group",TaskGroups.newTaskGroup(context));
             values.put("label", template.name);
             values.put("started_at", startsAt);
             values.put("ends_at", endsAt);
             runId = db.insertOrThrow("shift_runs", null, values);
             for (Occurrence occurrence : planned) {
-                TaskStore.insert(db, occurrence.rule.title, occurrence.dueAt == 0 ? Math.max(now, startsAt) : now, occurrence.rule.priority,
+                long taskId=TaskStore.insert(db, occurrence.rule.title, occurrence.dueAt == 0 ? Math.max(now, startsAt) : now, occurrence.rule.priority,
                         occurrence.dueAt, TaskStore.REPEAT_NEVER,
                         occurrence.rule.notifyBeforeMinutes, runId, template.name);
+                store.setGroup(taskId,TaskGroups.newTaskGroup(context));
             }
             db.setTransactionSuccessful();
         } finally {
@@ -313,6 +429,7 @@ public final class ShiftRepository implements AutoCloseable {
         public final String label;
         public final long startsAt;
         public final long endsAt;
+        public String group="";
         Run(long id, long templateId, String label, long startsAt, long endsAt) {
             this.id = id; this.templateId = templateId; this.label = label;
             this.startsAt = startsAt; this.endsAt = endsAt;

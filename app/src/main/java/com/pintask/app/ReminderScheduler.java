@@ -17,7 +17,7 @@ public final class ReminderScheduler {
     }
 
     public static void schedule(Context context, TaskStore.Task task) {
-        if (task == null || task.done || (task.dueAt <= 0 && task.shiftRunId == 0 && task.snoozedUntil == 0) || task.remindedAt > 0) return;
+        if (task == null || task.done || !task.reminderEnabled() || (task.dueAt <= 0 && task.shiftRunId == 0 && task.snoozedUntil == 0) || task.remindedAt > 0) return;
         long notifyAt = task.notificationAt();
         if (notifyAt <= System.currentTimeMillis()) {
             deliver(context, task.id);

@@ -38,8 +38,9 @@ final class TaskCards {
         title.setTextSize(14);
         title.setTextColor(Color.rgb(240, 244, 249));
         details.addView(title);
+        TextView extra=new TextView(activity);extra.setText(TaskDetails.summary(task));extra.setTextColor(Color.LTGRAY);if(!TaskDetails.summary(task).isEmpty())details.addView(extra);
         TextView date = new TextView(activity);
-        date.setText((task.shiftRunId > 0 ? task.shiftLabel + " · " : "") + "Done " +
+        date.setText((task.group.isEmpty()?"":task.group+" · ") + (task.shiftRunId > 0 ? task.shiftLabel + " · " : "") + "Done " +
                 DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(task.completedAt)));
         date.setTextColor(Color.rgb(150, 163, 179));
         date.setTextSize(11);

@@ -1,582 +1,263 @@
 package com.pintask.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
+import android.content.Intent;
 import android.graphics.Color;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
-import android.text.InputFilter;
-import android.text.TextUtils;
-import android.view.Gravity;
 import android.view.View;
-import android.widget.ArrayAdapter;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.LinearLayout;
-import android.widget.ScrollView;
-import android.widget.Spinner;
-import android.widget.TextView;
-import android.widget.Toast;
-import android.widget.AdapterView;
+import android.widget.*;
+import java.time.*;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
-import java.text.DateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
-import java.util.function.IntConsumer;
-
-/** Optional shift scheduler: reusable templates, fixed and interval rules, overnight support. */
+/** Simple calendar workflow backed by the original task and shift tables. */
 public final class ShiftActivity extends Activity {
-    private static final int BG = Color.rgb(13, 18, 26);
-    private static final int SURFACE = Color.rgb(24, 32, 43);
-    private static final int BORDER = Color.rgb(48, 59, 72);
-    private static final int WHITE = Color.rgb(240, 244, 249);
-    private static final int MUTED = Color.rgb(150, 163, 179);
-    private static final int ACCENT = Color.rgb(175, 241, 138);
-    private static final int[] INTERVALS = {0, 30, 60, 120, 180, 240};
-    private static final int[] EARLY = {0, 5, 10, 15, 30, 60};
-
     private ShiftRepository repository;
-    private List<ShiftRepository.Template> templates = new ArrayList<>();
-    private Spinner templateSpinner, intervalSpinner, earlySpinner, prioritySpinner;
-    private EditText templateName, stepName;
-    private TextView newStartView, newEndView, stepTimeView, selectedTemplateView, dateView;
-    private LinearLayout stepsArea, currentArea, doneArea;
-    private int doneLimit = 20;
+    private LinearLayout body;
     private UndoBar undoBar;
-    private int newStart = -1, newEnd = -1, stepClock = -1;
-    private final Calendar selectedDate = Calendar.getInstance();
-    private long selectedTemplateId = -1;
+    private int screen=0;
+    private LocalDate date=LocalDate.now();
+    private long taskRun=0;
+    private String draft="";
+    private int minute=-1, reminder=0, repeat=0;
+    private EditText name;
+    private boolean moreOptions;
+    private Spinner reminders, repeats;
+    private static final int[] EARLY={-2,0,5,10,15,30,60};
+    private static final int[] INTERVALS={0,30,60,120,180,240};
+    private static final int BG=Color.rgb(13,18,26), FG=Color.rgb(240,244,249);
 
-    @Override public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        repository = new ShiftRepository(this);
-        buildScreen();
-        refreshTemplates(-1);
-        refreshCurrentRun();
+    @Override public void onCreate(Bundle state) {
+        super.onCreate(state);
+        repository=new ShiftRepository(this);
+        if(state!=null) {
+            screen=state.getInt("screen"); date=LocalDate.parse(state.getString("date"));
+            taskRun=state.getLong("run"); draft=state.getString("draft","");
+            minute=state.getInt("minute",-1); reminder=state.getInt("reminder"); repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");
+        }
+        render();
     }
-
     @Override protected void onResume() {
         super.onResume();
-        if (repository != null && currentArea != null) refreshCurrentRun();
+        TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
+        if(repository!=null && screen!=2) render();
     }
-
-    @Override protected void onDestroy() {
-        if (repository != null) repository.close();
-        super.onDestroy();
+    @Override protected void onDestroy() { repository.close(); super.onDestroy(); }
+    private void remember() {
+        if(name!=null) { draft=name.getText().toString(); reminder=reminders.getSelectedItemPosition(); repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition(); }
     }
-
-    private void refreshTemplates(long chooseId) {
-        templates = repository.templates();
-        List<String> labels = new ArrayList<>();
-        int position = 0;
-        for (int i = 0; i < templates.size(); i++) {
-            ShiftRepository.Template t = templates.get(i);
-            labels.add(t.name + "  (" + clock(t.startMinute) + "–" + clock(t.endMinute()) + ")");
-            if (t.id == chooseId || (chooseId <= 0 && t.id == selectedTemplateId)) position = i;
+    @Override protected void onSaveInstanceState(Bundle state) {
+        remember(); state.putInt("screen",screen); state.putString("date",date.toString());
+        state.putLong("run",taskRun); state.putString("draft",draft); state.putInt("minute",minute);
+        state.putInt("reminder",reminder); state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions); super.onSaveInstanceState(state);
+    }
+    @Override public void onBackPressed() { if(screen!=0) { remember(); screen=0; render(); } else super.onBackPressed(); }
+    private void render() {
+        name=null;
+        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(BG);
+        root.setPadding(dp(16),dp(20),dp(16),dp(16));
+        if(Build.VERSION.SDK_INT>=30) root.setOnApplyWindowInsetsListener((v,insets)->{
+            android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars());
+            v.setPadding(dp(16)+bars.left,dp(20)+bars.top,dp(16)+bars.right,dp(16)+bars.bottom);return insets;
+        }); else root.setFitsSystemWindows(true);
+        setContentView(root);
+        LinearLayout nav=new LinearLayout(this); root.addView(nav);
+        String[] tabs={"Today","Schedule","Add Task"};
+        for(int i=0;i<tabs.length;i++) {
+            final int page=i; Button tab=new Button(this); tab.setText(tabs[i]); tab.setAllCaps(false);
+            tab.setTextColor(screen==i?Color.rgb(175,241,138):FG); nav.addView(tab,new LinearLayout.LayoutParams(0,-2,1));
+            tab.setOnClickListener(v->{ if(page==screen)return; remember(); if(page==2 && draft.isEmpty()) { moreOptions=false; ShiftRepository.Run current=repository.currentRun(); taskRun=current==null?0:current.id; date=LocalDate.now(); repeat=0; } screen=page; render(); });
         }
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, labels);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        templateSpinner.setAdapter(adapter);
-        if (!labels.isEmpty()) {
-            templateSpinner.setSelection(position);
-            selectedTemplateId = templates.get(position).id;
-            refreshSteps(true);
+        ScrollView scroll=new ScrollView(this); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); body.setPadding(0,dp(16),0,dp(24)); scroll.addView(body);
+        undoBar=new UndoBar(this); root.addView(undoBar);
+        header();
+        if(screen==0) today(); else if(screen==1) schedule(); else addTask();
+    }
+    private void today() {
+        text("Today · "+LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, d MMM")),22);
+        ShiftRepository.Run current=repository.currentRun();
+        if(current!=null) { action("Current: "+summary(current),()->{date=dateOf(current.startsAt);screen=1;render();});showTasks(repository.runTasks(current.id)); }
+        else if(repository.runsForDate(LocalDate.now()).isEmpty())action("Choose today’s shift",()->{date=LocalDate.now();screen=1;render();});
+        for(ShiftRepository.Run run:repository.runsForDate(LocalDate.now())) {
+            if(current==null || run.id!=current.id) { action(summary(run),()->{date=dateOf(run.startsAt);screen=1;render();});showTasks(repository.runTasks(run.id)); }
         }
-    }
-
-    private ShiftRepository.Template selectedTemplate() {
-        for (ShiftRepository.Template t : templates) if (t.id == selectedTemplateId) return t;
-        return null;
-    }
-
-    private void refreshSteps(boolean resetTime) {
-        ShiftRepository.Template t = selectedTemplate();
-        if (t == null || stepsArea == null) return;
-        if (resetTime) stepClock = -1;
-        stepTimeView.setText(stepClock < 0 ? "No specific time · Tap to set a time" : "First time: " + clock(stepClock));
-        selectedTemplateView.setText("SHIFT TEMPLATE · " + t.name + " · " + clock(t.startMinute) + "–" + clock(t.endMinute()));
-        stepsArea.removeAllViews();
-        List<ShiftRepository.Step> rules = repository.steps(t.id);
-        if (rules.isEmpty()) {
-            stepsArea.addView(text("No tasks in this template yet. Add a task below.", 13, MUTED, false));
-        }
-        for (ShiftRepository.Step step : rules) {
-            LinearLayout box = rowBox();
-            LinearLayout summary = new LinearLayout(this);
-            summary.setOrientation(LinearLayout.VERTICAL);
-            TextView name = text(step.title, 15, WHITE, true);
-            name.setMaxLines(2);
-            name.setEllipsize(TextUtils.TruncateAt.END);
-            summary.addView(name);
-            String time = step.firstMinute < 0 ? "No specific time" : clock((t.startMinute + step.firstMinute) % 1440) +
-                    (step.everyMinute > 0 ? " · Every " + intervalLabel(step.everyMinute) : " · Once") +
-                    (step.notifyBeforeMinutes > 0 ? " · " + step.notifyBeforeMinutes + "m early" : "");
-            TextView meta = text(time, 11, MUTED, false);
-            meta.setPadding(0, dp(5), 0, 0);
-            summary.addView(meta);
-            TextView edit = text("Add / change / remove time", 12, ACCENT, true);
-            edit.setPadding(0, dp(12), 0, dp(12));
-            edit.setOnClickListener(v -> editStepTime(step, t));
-            summary.addView(edit);
-            box.addView(summary, new LinearLayout.LayoutParams(0, -2, 1f));
-            Button delete = button("Remove", SURFACE, MUTED);
-            box.addView(delete, new LinearLayout.LayoutParams(dp(82), dp(42)));
-            delete.setOnClickListener(v -> new AlertDialog.Builder(this)
-                    .setTitle("Remove template task?")
-                    .setMessage("Existing shift schedules will not change.")
-                    .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Remove", (d, w) -> {
-                        repository.deleteStep(step.id, t.id);
-                        refreshSteps(false);
-                    }).show());
-            stepsArea.addView(box, spaced(0, 7));
-        }
-    }
-
-    private void addTemplate() {
-        try {
-            if (newStart < 0 || newEnd < 0) throw new IllegalArgumentException("Choose your shift start and end times");
-            ShiftRepository.Template t = repository.addTemplate(templateName.getText().toString(), newStart, newEnd);
-            templateName.setText("");
-            refreshTemplates(t.id);
-            show("Saved shift template");
-        } catch (IllegalArgumentException e) {
-            show(e.getMessage());
-        }
-    }
-
-    private void editStepTime(ShiftRepository.Step step, ShiftRepository.Template t) {
-        new AlertDialog.Builder(this).setTitle("Task time")
-                .setMessage("Changes apply the next time you start this template.")
-                .setPositiveButton("Set time", (d, w) -> pickTime(stepTimeView,
-                        step.firstMinute < 0 ? t.startMinute : (t.startMinute + step.firstMinute) % 1440, m -> {
-                    try {
-                        repository.updateStepTime(step, ShiftRepository.offsetFromClock(t, m));
-                        refreshSteps(false);
-                    } catch (IllegalArgumentException e) { show(e.getMessage()); }
-                }))
-                .setNeutralButton("No time", (d, w) -> {
-                    repository.updateStepTime(step, -1);
-                    refreshSteps(false);
-                }).setNegativeButton("Cancel", null).show();
-    }
-
-    private void editShiftHours() {
-        ShiftRepository.Template t = selectedTemplate();
-        if (t == null) { show("Create your own shift below first"); return; }
-        new AlertDialog.Builder(this).setTitle("Edit shift hours")
-                .setMessage("Choose start, then end. Timed tasks keep their offset from the shift start. Existing scheduled shifts stay unchanged.")
-                .setPositiveButton("Choose hours", (d, w) -> pickTime(newStartView, t.startMinute, start ->
-                        pickTime(newEndView, t.endMinute(), end -> {
-                            try {
-                                repository.updateTemplateTimes(t.id, start, end);
-                                refreshTemplates(t.id);
-                            } catch (IllegalArgumentException e) { show(e.getMessage()); }
-                        })))
-                .setNegativeButton("Cancel", null).show();
-    }
-
-    private void addStep() {
-        ShiftRepository.Template t = selectedTemplate();
-        if (t == null) { show("Create your own shift below first"); return; }
-        int offset = stepClock < 0 ? -1 : ShiftRepository.offsetFromClock(t, stepClock);
-        try {
-            repository.addStep(t.id, stepName.getText().toString(), offset,
-                    INTERVALS[intervalSpinner.getSelectedItemPosition()],
-                    prioritySpinner.getSelectedItemPosition(), EARLY[earlySpinner.getSelectedItemPosition()]);
-            stepName.setText("");
-            stepClock = -1;
-            intervalSpinner.setSelection(0);
-            refreshSteps(false);
-            show("Added to " + t.name);
-        } catch (IllegalArgumentException e) {
-            show(e.getMessage());
-        }
-    }
-
-    private void startShift() {
-        ShiftRepository.Template t = selectedTemplate();
-        if (t == null) { show("Create your own shift below first"); return; }
-        try {
-            long time = ShiftRepository.runStartForDate(t, selectedDate.get(Calendar.YEAR),
-                    selectedDate.get(Calendar.MONTH), selectedDate.get(Calendar.DAY_OF_MONTH));
-            ShiftRepository.Run run = repository.startShift(t.id, time);
-            TaskNotifications.syncAll(this);
-            ReminderScheduler.rescheduleAll(this);
-            refreshCurrentRun();
-            show("Shift scheduled: " + run.label);
-        } catch (IllegalArgumentException e) {
-            show(e.getMessage());
-        }
-    }
-
-    private void finishShift(ShiftRepository.Run run) {
-        new AlertDialog.Builder(this)
-                .setTitle("End " + run.label + "?")
-                .setMessage("Unfinished shift tasks and their notifications will be canceled, not marked Done. Completed tasks remain in history.")
-                .setNegativeButton("Keep shift", null)
-                .setPositiveButton("End shift", (d, w) -> {
-                    for (long id : repository.endShift(run.id)) {
-                        ReminderScheduler.cancel(this, id);
-                        TaskNotifications.cancel(this, id);
-                    }
-                    refreshCurrentRun();
-                }).show();
-    }
-
-    private void refreshCurrentRun() {
-        currentArea.removeAllViews();
-        refreshDone();
-        ShiftRepository.Run run = repository.currentRun();
-        if (run == null) {
-            currentArea.addView(text("No active shift. Choose a template and date, then start your shift.", 13, MUTED, false));
-            return;
-        }
-        TextView headline = text(run.label + "  ·  " +
-                DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(run.startsAt)) +
-                " – " + DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(run.endsAt)),
-                14, WHITE, true);
-        currentArea.addView(headline, spaced(0, 6));
-        List<TaskStore.Task> tasks = repository.runTasks(run.id);
-        int finished = 0;
-        for (TaskStore.Task task : tasks) if (task.done) finished++;
-        currentArea.addView(text(finished + " / " + tasks.size() + " tasks completed" +
-                (System.currentTimeMillis() < run.startsAt ? " · Upcoming shift" :
-                        System.currentTimeMillis() > run.endsAt ? " · Shift time ended" : " · Shift in progress"),
-                12, ACCENT, false), spaced(0, 12));
-        for (TaskStore.Task task : tasks) {
-            if (task.done) continue;
-            LinearLayout row = rowBox();
-            LinearLayout details = new LinearLayout(this);
-            details.setOrientation(LinearLayout.VERTICAL);
-            TextView title = text(task.title, 14, task.done ? MUTED : WHITE, !task.done);
-            details.addView(title);
-            String when = task.dueAt == 0 ? (task.done ? "Done" : "No specific time") : DateFormat.getTimeInstance(DateFormat.SHORT).format(new Date(task.dueAt)) +
-                    " · " + (task.done ? "Done" : System.currentTimeMillis() > task.dueAt ? "Overdue" : "Scheduled");
-            details.addView(text(when, 12, task.done ? ACCENT : MUTED, false));
-            row.addView(details, new LinearLayout.LayoutParams(0, -2, 1));
-            if (!task.done) {
-                TextView timing = text("Add / change time", 12, ACCENT, true);
-                timing.setPadding(0, dp(12), 0, dp(12));
-                timing.setOnClickListener(v -> TaskTimingEditor.open(this, task, this::refreshCurrentRun));
-                details.addView(timing);
-                Button done = button("Done", ACCENT, BG);
-                LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(68), dp(42));
-                p.leftMargin = dp(9);
-                row.addView(done, p);
-                done.setOnClickListener(v -> {
-                    try (TaskStore tasksStore = new TaskStore(this)) {
-                        TaskStore.Completion completed = tasksStore.complete(task.id);
-                        if (completed != null) {
-                            ReminderScheduler.cancel(this, task.id);
-                            TaskNotifications.cancel(this, task.id);
-                            undoBar.offer(task.id,this::refreshCurrentRun);
-                        }
-                    }
-                    refreshCurrentRun();
-                });
-                row.addView(TaskCards.overflow(this, task, this::refreshCurrentRun));
-            }
-            currentArea.addView(row, spaced(0, 6));
-        }
-        Button refresh = button("↻  Refresh task status", SURFACE, WHITE);
-        currentArea.addView(refresh, spaced(4, 8));
-        refresh.setOnClickListener(v -> refreshCurrentRun());
-        Button end = button("End shift · Cancel unfinished tasks", SURFACE, Color.rgb(255, 158, 134));
-        currentArea.addView(end, spaced(0, 8));
-        end.setOnClickListener(v -> finishShift(run));
-    }
-
-    private void refreshDone() {
-        if (doneArea == null) return;
-        doneArea.removeAllViews();
-        try (TaskStore store = new TaskStore(this)) {
-            List<TaskStore.Task> completed = store.completedShifts(doneLimit + 1);
-            if (completed.isEmpty()) doneArea.addView(text("Finished shift tasks will appear here, including after you end a shift.", 13, MUTED, false));
-            for (int i = 0; i < Math.min(doneLimit, completed.size()); i++)
-                doneArea.addView(TaskCards.done(this, completed.get(i), this::refreshCurrentRun));
-            if (completed.size() > doneLimit) {
-                Button more = button("Show more completed tasks", SURFACE, ACCENT);
-                doneArea.addView(more);
-                more.setOnClickListener(v -> { doneLimit += 20; refreshDone(); });
-            }
-        }
-    }
-
-    private void pickTime(TextView target, int minute, IntConsumer selected) {
-        int initial = minute < 0 ? 0 : minute;
-        new TimePickerDialog(this, (view, hour, min) -> {
-            int newMinute = hour * 60 + min;
-            selected.accept(newMinute);
-            // Caller controls the label and selected time.
-        }, initial / 60, initial % 60, android.text.format.DateFormat.is24HourFormat(this)).show();
-    }
-
-    private void pickShiftDate() {
-        new DatePickerDialog(this, (date, year, month, day) -> {
-            selectedDate.set(Calendar.YEAR, year);
-            selectedDate.set(Calendar.MONTH, month);
-            selectedDate.set(Calendar.DAY_OF_MONTH, day);
-            dateView.setText("Shift date: " + dateLabel());
-        }, selectedDate.get(Calendar.YEAR), selectedDate.get(Calendar.MONTH),
-                selectedDate.get(Calendar.DAY_OF_MONTH)).show();
-    }
-
-    private String dateLabel() {
-        return DateFormat.getDateInstance(DateFormat.MEDIUM).format(selectedDate.getTime());
-    }
-
-    private static String clock(int minute) {
-        int m = ((minute % 1440) + 1440) % 1440;
-        return String.format(Locale.US, "%02d:%02d", m / 60, m % 60);
-    }
-    private static String intervalLabel(int minute) {
-        return minute >= 60 ? (minute / 60) + "h" : minute + "m";
-    }
-
-    private TextView text(String value, int size, int color, boolean bold) {
-        TextView view = new TextView(this);
-        view.setText(value);
-        view.setTextColor(color);
-        view.setTextSize(size);
-        if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return view;
-    }
-
-    private EditText input(String hint) {
-        EditText field = new EditText(this);
-        field.setSingleLine(true);
-        field.setTextSize(15);
-        field.setTextColor(WHITE);
-        field.setHintTextColor(MUTED);
-        field.setHint(hint);
-        field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(160)});
-        return field;
-    }
-
-    private Button button(String label, int bg, int fg) {
-        Button view = new Button(this);
-        view.setText(label);
-        view.setAllCaps(false);
-        view.setTextSize(13);
-        view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        view.setTextColor(fg);
-        view.setBackground(outline(bg, 11));
-        return view;
-    }
-
-    private LinearLayout rowBox() {
-        LinearLayout container = new LinearLayout(this);
-        container.setOrientation(LinearLayout.HORIZONTAL);
-        container.setGravity(Gravity.CENTER_VERTICAL);
-        container.setPadding(dp(12), dp(8), dp(8), dp(8));
-        container.setBackground(outline(SURFACE, 12));
-        return container;
-    }
-
-    private GradientDrawable outline(int fill, int round) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setColor(fill);
-        shape.setCornerRadius(dp(round));
-        shape.setStroke(dp(1), BORDER);
-        return shape;
-    }
-
-    private Spinner spinner(String[] values, int initial) {
-        Spinner control = new Spinner(this);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_spinner_item, values) {
-            @Override public View getView(int position, View convert, android.view.ViewGroup parent) {
-                TextView view = (TextView) super.getView(position, convert, parent);
-                view.setTextColor(WHITE);
-                view.setPadding(dp(9), dp(10), dp(9), dp(10));
-                return view;
-            }
-        };
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        control.setAdapter(adapter);
-        control.setSelection(initial);
-        control.setBackground(outline(BG, 10));
-        return control;
-    }
-
-    private LinearLayout panel() {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(14), dp(14), dp(14), dp(14));
-        box.setBackground(outline(SURFACE, 16));
-        return box;
-    }
-
-    private LinearLayout.LayoutParams spaced(int top, int bottom) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
-        p.topMargin = dp(top);
-        p.bottomMargin = dp(bottom);
-        return p;
-    }
-
-    private void show(String message) { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); }
-    private int dp(float v) { return (int) (v * getResources().getDisplayMetrics().density + .5f); }
-
-    private void buildScreen() {
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setBackgroundColor(BG);
-        setContentView(scroll);
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(34), dp(18), dp(30));
-        root.setFitsSystemWindows(true);
-        scroll.addView(root);
-        TextView back = text("‹  PERSONAL TASKS", 13, ACCENT, true);
-        back.setPadding(0, 0, 0, dp(16));
-        back.setOnClickListener(v -> finish());
-        root.addView(back);
-        root.addView(text("Shift scheduler", 29, WHITE, true), spaced(0, 6));
-        root.addView(text("Separate from personal tasks. Design a shift once, then start it whenever you work.",
-                14, MUTED, false), spaced(0, 20));
-
-        root.addView(text("YOUR CURRENT SHIFT", 12, ACCENT, true), spaced(0, 9));
-        currentArea = panel();
-        root.addView(currentArea, spaced(0, 22));
-        undoBar = new UndoBar(this);
-        root.addView(undoBar,spaced(0,9));
-
-        root.addView(text("DONE · SHIFT HISTORY", 12, ACCENT, true), spaced(0, 9));
-        doneArea = panel();
-        root.addView(doneArea, spaced(0, 22));
-
-        root.addView(text("SELECT SHIFT TEMPLATE", 12, ACCENT, true), spaced(0, 9));
-        templateSpinner = spinner(new String[]{}, 0);
-        root.addView(templateSpinner, spaced(0, 12));
-        selectedTemplateView = text("No templates yet. Create your own shift below.", 12, MUTED, true);
-        root.addView(selectedTemplateView, spaced(0, 12));
-        Button editHours = button("Edit selected shift hours", SURFACE, ACCENT);
-        root.addView(editHours, spaced(0, 12));
-        editHours.setOnClickListener(v -> editShiftHours());
-        Button duplicate = button("Duplicate selected shift",SURFACE,ACCENT);
-        root.addView(duplicate,spaced(0,12));
-        duplicate.setOnClickListener(v -> {
-            ShiftRepository.Template template = selectedTemplate();
-            if (template == null) { show("Create a shift first"); return; }
-            EditText name = input("New shift name"); name.setText(template.name + " copy");
-            AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Duplicate shift").setView(name)
-                    .setNegativeButton("Cancel",null).setPositiveButton("Duplicate",null).create();
-            dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(button -> {
-                try { ShiftRepository.Template copy=repository.duplicateTemplate(template.id,name.getText().toString());
-                    refreshTemplates(copy.id); dialog.dismiss(); show("Copied. You can now edit its hours and tasks.");
-                } catch (IllegalArgumentException e) { name.setError(e.getMessage()); }
-            })); dialog.show();
-        });
-        templateSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (position < templates.size()) {
-                    selectedTemplateId = templates.get(position).id;
-                    refreshSteps(true);
+        long tomorrow=LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        try(TaskStore store=new TaskStore(this)) {
+            List<TaskStore.Task> personal=new ArrayList<>(), earlier=new ArrayList<>();
+            for(TaskStore.Task task:TaskGroups.filter(this,store.active())) {
+                if(task.shiftRunId==0 && (task.dueAt==0 || task.dueAt<tomorrow)) personal.add(task);
+                if(task.shiftRunId>0) {
+                    ShiftRepository.Run run=repository.findRun(task.shiftRunId);
+                    if(run!=null && run.endsAt<=System.currentTimeMillis() && !dateOf(run.startsAt).equals(LocalDate.now())) earlier.add(task);
                 }
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) { }
-        });
-
-        root.addView(text("TASK RULES IN TEMPLATE", 12, ACCENT, true), spaced(0, 10));
-        stepsArea = new LinearLayout(this);
-        stepsArea.setOrientation(LinearLayout.VERTICAL);
-        root.addView(stepsArea, spaced(0, 10));
-        LinearLayout rule = panel();
-        root.addView(rule, spaced(0, 20));
-        rule.addView(text("ADD SHIFT TASK", 12, MUTED, true), spaced(0, 6));
-        stepName = input("What needs doing?");
-        rule.addView(stepName, spaced(0, 6));
-        stepTimeView = text("No specific time · Tap to set a time", 14, ACCENT, true);
-        stepTimeView.setPadding(dp(12), dp(12), dp(12), dp(12));
-        stepTimeView.setBackground(outline(BG, 10));
-        stepTimeView.setOnClickListener(v -> pickTime(stepTimeView, stepClock, m -> {
-            stepClock = m;
-            stepTimeView.setText("First time: " + clock(m));
-        }));
-        rule.addView(stepTimeView, spaced(0, 10));
-        Button noTime = button("No specific time", SURFACE, ACCENT);
-        rule.addView(noTime, spaced(0, 10));
-        noTime.setOnClickListener(v -> { stepClock = -1; intervalSpinner.setSelection(0); refreshSteps(false); });
-        rule.addView(text("REPEAT WITHIN THIS SHIFT", 11, MUTED, true));
-        intervalSpinner = spinner(new String[]{"Once", "Every 30 minutes", "Every hour",
-                "Every 2 hours", "Every 3 hours", "Every 4 hours"}, 0);
-        rule.addView(intervalSpinner, spaced(3, 10));
-        rule.addView(text("SHOW BEFORE TASK TIME", 11, MUTED, true));
-        earlySpinner = spinner(new String[]{"At task time", "5 minutes", "10 minutes",
-                "15 minutes", "30 minutes", "60 minutes"}, 0);
-        rule.addView(earlySpinner, spaced(3, 10));
-        rule.addView(text("PRIORITY", 11, MUTED, true));
-        prioritySpinner = spinner(new String[]{"Low", "Normal", "High"}, 1);
-        rule.addView(prioritySpinner, spaced(3, 11));
-        Button addStep = button("+  Add to shift template", ACCENT, BG);
-        rule.addView(addStep, new LinearLayout.LayoutParams(-1, dp(45)));
-        addStep.setOnClickListener(v -> addStep());
-
-        root.addView(text("START A SHIFT", 12, ACCENT, true), spaced(0, 9));
-        LinearLayout startBox = panel();
-        root.addView(startBox, spaced(0, 21));
-        dateView = text("Shift date: " + dateLabel(), 14, WHITE, true);
-        dateView.setPadding(dp(11), dp(11), dp(11), dp(11));
-        dateView.setBackground(outline(BG, 10));
-        dateView.setOnClickListener(v -> pickShiftDate());
-        startBox.addView(dateView, spaced(0, 11));
-        startBox.addView(text("This generates each scheduled task for that shift only. "+
-                "Hourly rules stop at shift end. Starting midway skips already-past occurrences.",
-                12, MUTED, false), spaced(0, 12));
-        Button startButton = button("Start / schedule selected shift", ACCENT, BG);
-        startBox.addView(startButton, new LinearLayout.LayoutParams(-1, dp(46)));
-        startButton.setOnClickListener(v -> startShift());
-
-        TextView customHeading = text("CREATE YOUR OWN SHIFT", 12, ACCENT, true);
-        root.addView(customHeading, spaced(0, 9));
-        LinearLayout custom = panel();
-        root.addView(custom, spaced(0, 22));
-        templateName = input("Name, e.g. Early shift");
-        custom.addView(templateName, spaced(0, 8));
-        LinearLayout timeRow = new LinearLayout(this);
-        timeRow.setOrientation(LinearLayout.HORIZONTAL);
-        custom.addView(timeRow, spaced(0, 10));
-        newStartView = text("Choose start time", 14, WHITE, true);
-        newStartView.setGravity(Gravity.CENTER);
-        newStartView.setPadding(dp(6), dp(12), dp(6), dp(12));
-        newStartView.setBackground(outline(BG, 9));
-        LinearLayout.LayoutParams left = new LinearLayout.LayoutParams(0, -2, 1);
-        left.rightMargin = dp(8);
-        timeRow.addView(newStartView, left);
-        newStartView.setOnClickListener(v -> pickTime(newStartView, newStart, m -> {
-            newStart = m;
-            newStartView.setText("Start: " + clock(m));
-        }));
-        newEndView = text("Choose end time", 14, WHITE, true);
-        newEndView.setGravity(Gravity.CENTER);
-        newEndView.setPadding(dp(6), dp(12), dp(6), dp(12));
-        newEndView.setBackground(outline(BG, 9));
-        timeRow.addView(newEndView, new LinearLayout.LayoutParams(0, -2, 1));
-        newEndView.setOnClickListener(v -> pickTime(newEndView, newEnd, m -> {
-            newEnd = m;
-            newEndView.setText("End: " + clock(m));
-        }));
-        Button create = button("+  Save new template", SURFACE, ACCENT);
-        custom.addView(create, new LinearLayout.LayoutParams(-1, dp(46)));
-        create.setOnClickListener(v -> addTemplate());
-
-        // Make setup discoverable before the empty template selector on a new installation.
-        root.removeView(customHeading);
-        root.removeView(custom);
-        root.addView(customHeading, 3, spaced(0, 9));
-        root.addView(custom, 4, spaced(0, 22));
-
-        root.addView(text("Reminders are best-effort Android notifications, not guaranteed exact alarms. " +
-                "Don't rely on PinTask alone for time-critical patient care.", 12, MUTED, false));
+            showTasks(personal);
+            if(!earlier.isEmpty()) { text("Unfinished from earlier shifts",18); showTasks(earlier); }
+        }
+        action("Add task",()->{ taskRun=current==null?0:current.id; date=LocalDate.now(); repeat=0; screen=2; render(); });
     }
+    private void header() {
+        LinearLayout row=new LinearLayout(this);
+        TextView group=new TextView(this);String selected=TaskGroups.selected(this);group.setText(selected==null?"All groups":selected.isEmpty()?"Ungrouped":selected);group.setTextColor(FG);group.setTextSize(14);group.setPadding(dp(8),dp(12),0,dp(12));
+        group.setOnClickListener(v->{remember();TaskGroups.choose(this,()->{taskRun=0;repeat=0;render();});});row.addView(group,new LinearLayout.LayoutParams(0,-2,1));
+        Button more=new Button(this);more.setText("More");more.setAllCaps(false);row.addView(more);more.setOnClickListener(v->moreMenu(more));body.addView(row);
+    }
+    private void moreMenu(View anchor) {
+        PopupMenu menu=new PopupMenu(this,anchor);
+        menu.getMenu().add("Change job / patient").setOnMenuItemClickListener(i->{remember();TaskGroups.choose(this,()->{taskRun=0;repeat=0;render();});return true;});
+        menu.getMenu().add("All tasks and search").setOnMenuItemClickListener(i->{startActivity(new Intent(this,MainActivity.class).putExtra("search_all",true));return true;});
+        menu.getMenu().add("Task bundles").setOnMenuItemClickListener(i->{TaskBundles.show(this,this::render);return true;});
+        menu.getMenu().add("Completed tasks").setOnMenuItemClickListener(i->{remember();showHistory();return true;});
+        menu.getMenu().add("Saved templates").setOnMenuItemClickListener(i->{startActivity(new Intent(this,LegacyShiftActivity.class));return true;});
+        menu.getMenu().add("Quick Add notification: "+(TaskNotifications.quickAddEnabled(this)?"On":"Off")).setOnMenuItemClickListener(i->{
+            new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{
+                TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();
+                if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},41);
+            }).setNegativeButton("Cancel",null).show();return true;
+        });
+        menu.getMenu().add("Backup").setOnMenuItemClickListener(i->{startActivity(new Intent(this,BackupActivity.class));return true;});menu.show();
+    }
+    private void showHistory() {
+        body.removeAllViews();header();text("Completed tasks",22);
+        try(TaskStore store=new TaskStore(this)){for(TaskStore.Task task:TaskGroups.filter(this,store.completedAll()))body.addView(TaskCards.done(this,task,this::showHistory));}
+        action("Back to Today",()->{screen=0;render();});
+    }
+    private void schedule() {
+        text("Schedule",22);
+        CalendarView calendar=new CalendarView(this);calendar.setDate(date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());body.addView(calendar);
+        LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);body.addView(details);renderDate(details);
+        calendar.setOnDateChangeListener((v,y,m,d)->{date=LocalDate.of(y,m+1,d);renderDate(details);});
+    }
+    private void renderDate(LinearLayout details) {
+        LinearLayout previous=body;body=details;body.removeAllViews();
+        text(date.format(DateTimeFormatter.ofPattern("EEE, d MMM")),18);
+        List<ShiftRepository.Run> runs=repository.runsForDate(date);
+        if(runs.isEmpty())action("Choose shift",this::chooseShift);
+        else {
+            for(ShiftRepository.Run run:runs) {
+                action(summary(run)+"  ·  Change",()->shiftMenu(run));
+                if(working(run))action("Add task",()->{taskRun=run.id;repeat=0;moreOptions=false;screen=2;render();});
+            }
+        }
+        body=previous;
+    }
+    private void chooseShift() {
+        String[] codes={"TD","ND","U8","EZ","Off"};
+        new AlertDialog.Builder(this).setTitle("Shift for "+date.format(DateTimeFormatter.ofPattern("d MMM")))
+            .setItems(new String[]{"TD · 08:00–20:00","ND · 20:00–08:00 next day","U8 · 08:00–16:00","EZ","Off"},(d,index)->{
+                try{repository.schedule(date,codes[index]);render();}catch(IllegalArgumentException e){toast(e.getMessage());}
+            }).setNegativeButton("Cancel",null).show();
+    }
+    private boolean working(ShiftRepository.Run run) {return run.templateId!=0 || (!run.label.equals("Off")&&!run.label.equals("EZ"));}
+    private void shiftMenu(ShiftRepository.Run run) {
+        new AlertDialog.Builder(this).setTitle(summary(run)).setItems(new String[]{"Choose another shift","View tasks","End / clear shift"},(d,index)->{
+            if(index==0){chooseShift();return;}
+            if(index==1){body.removeAllViews();header();text(summary(run),20);showTasks(repository.runTasks(run.id));action("Back to Schedule",this::render);return;}
+            new AlertDialog.Builder(this).setTitle("End "+run.label+"?").setMessage("Unfinished tasks and reminders will be canceled. Completed history stays saved.")
+                .setNegativeButton("Keep",null).setPositiveButton("End shift",(a,b)->{for(long id:repository.endShift(run.id)){ReminderScheduler.cancel(this,id);TaskNotifications.cancel(this,id);}render();}).show();
+        }).setNegativeButton("Close",null).show();
+    }
+    private void addTask() {
+        text("Add Task",22);
+        ShiftRepository.Run run=repository.findRun(taskRun);
+        if(run==null) taskRun=0;
+        text(run==null?"Personal task":summary(run),17);
+        LinearLayout main=body;
+        LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(LinearLayout.VERTICAL);
+        body=advanced;
+        action("Change day / shift",()->{
+            remember();
+            new DatePickerDialog(this,(v,y,m,d)->{
+                date=LocalDate.of(y,m+1,d);
+                List<ShiftRepository.Run> choices=new ArrayList<>();
+                for(ShiftRepository.Run r:repository.runsForDate(date)) if((r.templateId!=0 || (!r.label.equals("Off")&&!r.label.equals("EZ")))) choices.add(r);
+                String[] items=new String[choices.size()+1]; items[0]="Personal task";
+                for(int i=0;i<choices.size();i++) items[i+1]=summary(choices.get(i));
+                new AlertDialog.Builder(this).setTitle("Add task for "+date).setItems(items,(dialog,index)->{taskRun=index==0?0:choices.get(index-1).id;repeat=0;render();}).show();
+            },date.getYear(),date.getMonthValue()-1,date.getDayOfMonth()).show();
+        });
+        body=main;
+        name=new EditText(this); name.setSingleLine(true); name.setTextColor(FG); name.setHintTextColor(Color.LTGRAY);
+        name.setHint("Task name"); name.setText(draft); name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)}); body.addView(name);
+        action(minute<0?"Time · Optional":("Time · "+String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60)),()->{
+            remember(); int initial=minute<0?LocalTime.now().getHour()*60:minute;
+            new TimePickerDialog(this,(v,h,m)->{minute=h*60+m;render();},initial/60,initial%60,true).show();
+        });
+        action(moreOptions?"Less options":"More options",()->{remember();moreOptions=!moreOptions;render();});
+        main.addView(advanced);advanced.setVisibility(moreOptions?View.VISIBLE:View.GONE);body=advanced;
+        if(run==null) text("Date: "+date,14);
+        else if(run.label.equals("ND"))text("Times after midnight use the next morning.",14);
+        if(minute>=0) action("Remove time",()->{remember();minute=-1;reminder=0;repeat=0;render();});
+        text("Reminder · Optional",15);
+        reminders=spinner(new String[]{"No reminder","At task time","5 minutes before","10 minutes before","15 minutes before","30 minutes before","1 hour before"},reminder);
+        text("Repeat · Optional",15);
+        if(taskRun==0) {
+            repeats=new Spinner(this);RepeatRules.bind(this,repeats,repeat);body.addView(repeats);
+            action("Selected weekdays…",()->{remember();RepeatRules.weekdays(this,repeat,code->{repeat=code;render();});});
+            action("Custom repeat…",()->{remember();RepeatRules.custom(this,repeat,code->{repeat=code;render();});});
+        } else repeats=spinner(new String[]{"Never","Every 30 minutes","Every hour","Every 2 hours","Every 3 hours","Every 4 hours"},repeat);
+        body=main;
+        action("Save task",()->saveTask());
+    }
+    private void saveTask() {
+        remember();
+        try {
+            if(draft.trim().isEmpty()) { name.setError("Enter a task name"); return; }
+            if(minute<0 && (reminder>0 || repeat>0)) throw new IllegalArgumentException("Choose a time for reminders or repeats");
+            if(taskRun>0) repository.addTask(taskRun,draft,minute,INTERVALS[repeat],EARLY[reminder]);
+            else {
+                long due=minute<0?0:date.atTime(minute/60,minute%60).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                if(due>0 && due<=System.currentTimeMillis()) throw new IllegalArgumentException("Choose a future time");
+                try(TaskStore store=new TaskStore(this)) { store.add(draft,1,due,repeat,EARLY[reminder]); }
+            }
+            boolean wantsReminder=reminder>0;
+            draft=""; minute=-1; reminder=0; repeat=0; moreOptions=false; screen=0; render();
+            TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
+            if(wantsReminder && !TaskNotifications.canNotify(this)) {
+                if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},41);
+                else toast("Enable PinTask notifications in Android settings for reminders");
+            }
+            toast("Task saved");
+        } catch(IllegalArgumentException e) { toast(e.getMessage()); }
+    }
+    @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results) {
+        super.onRequestPermissionsResult(request,permissions,results);
+        TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
+        if(!TaskNotifications.canNotify(this)) toast("Task saved. Enable notifications in Android settings for reminders.");
+    }
+    private void showTasks(List<TaskStore.Task> tasks) {
+        tasks=TaskGroups.filter(this,tasks);
+        for(TaskStore.Task task:tasks) {
+            if(task.done)continue;
+            LinearLayout row=new LinearLayout(this);row.setGravity(android.view.Gravity.CENTER_VERTICAL);row.setPadding(0,dp(6),0,dp(6));
+            CheckBox done=new CheckBox(this);done.setContentDescription("Complete "+task.title);done.setEnabled(!task.paused);row.addView(done);
+            LinearLayout detail=new LinearLayout(this);detail.setOrientation(LinearLayout.VERTICAL);
+            TextView title=new TextView(this);title.setText(task.title);title.setTextColor(FG);title.setTextSize(17);detail.addView(title);title.setOnClickListener(v->TaskDetails.open(this,task,this::render));
+            String meta=(task.dueAt==0?"":java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(new Date(task.dueAt))+" · ")+(task.group.isEmpty()?"":task.group+" · ")+TaskDetails.summary(task);
+            if(!meta.isEmpty()){TextView time=new TextView(this);time.setText(meta.replaceAll(" · $",""));time.setTextColor(Color.LTGRAY);time.setTextSize(12);detail.addView(time);}
+            row.addView(detail,new LinearLayout.LayoutParams(0,-2,1));row.addView(TaskCards.overflow(this,task,this::render));body.addView(row);
+            done.setOnCheckedChangeListener((v,checked)->{if(!checked)return;boolean completed;
+                try(TaskStore store=new TaskStore(this)){TaskStore.Completion result=store.complete(task.id);completed=result!=null;if(completed){ReminderScheduler.cancel(this,task.id);TaskNotifications.cancel(this,task.id);}}
+                TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);render();if(completed)undoBar.offer(task.id,this::render);
+            });
+        }
+    }
+    private String summary(ShiftRepository.Run run) {
+        if(run.templateId==0 && (run.label.equals("Off")||run.label.equals("EZ"))) return (run.group.isEmpty()?"":run.group+" · ")+run.label;
+        DateTimeFormatter format=DateTimeFormatter.ofPattern("HH:mm");
+        return (run.group.isEmpty()?"":run.group+" · ")+run.label+" · "+Instant.ofEpochMilli(run.startsAt).atZone(ZoneId.systemDefault()).format(format)+" – "+Instant.ofEpochMilli(run.endsAt).atZone(ZoneId.systemDefault()).format(format)+(dateOf(run.startsAt).equals(dateOf(run.endsAt))?"":" (+1 day)");
+    }
+    private LocalDate dateOf(long value) { return Instant.ofEpochMilli(value).atZone(ZoneId.systemDefault()).toLocalDate(); }
+    private void text(String value,int size) { TextView v=new TextView(this);v.setText(value);v.setTextColor(FG);v.setTextSize(size);v.setPadding(4,12,4,8);body.addView(v); }
+    private void action(String label,Runnable action) { Button v=new Button(this);v.setText(label);v.setAllCaps(false);body.addView(v);v.setOnClickListener(w->action.run()); }
+    private Spinner spinner(String[] labels,int index) { Spinner v=new Spinner(this);ArrayAdapter<String> a=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,labels);a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);v.setAdapter(a);v.setSelection(Math.min(index,labels.length-1));body.addView(v);return v; }
+    private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
+    private void toast(String message) { Toast.makeText(this,message,Toast.LENGTH_LONG).show(); }
 }

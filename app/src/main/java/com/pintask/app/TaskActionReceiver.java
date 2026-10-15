@@ -14,6 +14,7 @@ public final class TaskActionReceiver extends BroadcastReceiver {
         if (intent == null) return;
         String action = intent.getAction();
         if (TaskNotifications.ACTION_QUICK_ADD.equals(action)) {
+            if(!TaskNotifications.quickAddEnabled(context)) return;
             Bundle answers = RemoteInput.getResultsFromIntent(intent);
             if (answers == null) return;
             CharSequence typed = answers.getCharSequence(TaskNotifications.REMOTE_TEXT);

@@ -12,7 +12,7 @@ final class TaskTimingEditor {
     static void open(Activity activity, TaskStore.Task task, Runnable refresh) {
         new AlertDialog.Builder(activity).setTitle(task.title)
                 .setItems(new String[]{"Set / change date and time", "No time — do whenever"}, (d, which) -> {
-                    if (which == 1) { save(activity, task, 0, -1, refresh); return; }
+                    if (which == 1) { save(activity, task, 0, task.notifyBeforeMinutes == TaskStore.REMINDER_OFF ? TaskStore.REMINDER_OFF : -1, refresh); return; }
                     Calendar selected = Calendar.getInstance();
                     if (task.dueAt > System.currentTimeMillis()) selected.setTimeInMillis(task.dueAt);
                     new DatePickerDialog(activity, (date, y, m, day) -> {
@@ -22,9 +22,9 @@ final class TaskTimingEditor {
                             selected.set(Calendar.MINUTE, min);
                             selected.set(Calendar.SECOND, 0);
                             selected.set(Calendar.MILLISECOND, 0);
-                            int[] early = {0, 5, 10, 15, 30, 60};
+                            int[] early = {-2, 0, 5, 10, 15, 30, 60};
                             new AlertDialog.Builder(activity).setTitle("Show notification")
-                                    .setItems(new String[]{"At task time", "5 minutes before", "10 minutes before",
+                                    .setItems(new String[]{"No reminder", "At task time", "5 minutes before", "10 minutes before",
                                             "15 minutes before", "30 minutes before", "1 hour before"},
                                             (dialog, index) -> save(activity, task, selected.getTimeInMillis(), early[index], refresh))
                                     .setNegativeButton("Cancel", null).show();

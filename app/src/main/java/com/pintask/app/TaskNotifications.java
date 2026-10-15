@@ -54,7 +54,7 @@ public final class TaskNotifications {
     }
 
     private static PendingIntent open(Context context) {
-        Intent intent = new Intent(context, MainActivity.class);
+        Intent intent = new Intent(context, ShiftActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         return PendingIntent.getActivity(context, 2, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -84,7 +84,7 @@ public final class TaskNotifications {
 
     public static void show(Context context, TaskStore.Task task) {
         TaskWidget.refreshAll(context);
-        if (task == null || task.done || !canNotify(context)) return;
+        if (task == null || task.done || !task.reminderEnabled() || !canNotify(context)) return;
         if (task.snoozedUntil > System.currentTimeMillis()) return;
         if (task.dueAt == 0 && task.shiftRunId > 0 && System.currentTimeMillis() < task.notificationAt()) return;
         // Scheduled tasks appear only when their selected advance interval begins.
@@ -148,7 +148,34 @@ public final class TaskNotifications {
         context.getSystemService(NotificationManager.class).notify("undo",(int)id,notification);
     }
 
+    /** v2 deliberately requires fresh opt-in after older always-on builds. */
+    public static boolean quickAddEnabled(Context context) {
+        return context.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean("quick_add_opt_in_v2",false);
+    }
+    public static void setQuickAddEnabled(Context context,boolean enabled) {
+        clearQuickAdd(context);
+        context.getSharedPreferences("settings",Context.MODE_PRIVATE).edit().remove("quick_add").putBoolean("quick_add_opt_in_v2",enabled).apply();
+        showQuickAdd(context);
+    }
+    private static void clearQuickAdd(Context context) {
+        NotificationManager manager=context.getSystemService(NotificationManager.class);if(manager==null)return;
+        manager.cancel(QUICK_ID);
+        // Older builds may have used a tag or a different ID. Only remove the shortcut.
+        for(android.service.notification.StatusBarNotification active:manager.getActiveNotifications()) {
+            boolean shortcut=active.getId()==QUICK_ID;
+            Notification notification=active.getNotification();
+            if(notification.actions!=null)for(Notification.Action action:notification.actions) {
+                RemoteInput[] inputs=action.getRemoteInputs();if(inputs!=null)for(RemoteInput input:inputs)if(REMOTE_TEXT.equals(input.getResultKey()))shortcut=true;
+            }
+            if(shortcut)manager.cancel(active.getTag(),active.getId());
+        }
+        Intent intent=new Intent(context,TaskActionReceiver.class).setAction(ACTION_QUICK_ADD);
+        PendingIntent old=PendingIntent.getBroadcast(context,QUICK_ID,intent,PendingIntent.FLAG_NO_CREATE|PendingIntent.FLAG_MUTABLE);
+        if(old!=null)old.cancel();
+    }
+
     public static void showQuickAdd(Context context) {
+        if(!quickAddEnabled(context)) { clearQuickAdd(context);return; }
         if (!canNotify(context)) return;
         ensureChannel(context);
         Intent intent = new Intent(context, TaskActionReceiver.class);
@@ -178,8 +205,8 @@ public final class TaskNotifications {
     }
 
     public static void syncAll(Context context) {
-        if (!canNotify(context)) return;
         showQuickAdd(context);
+        if (!canNotify(context)) return;
         try (TaskStore store = new TaskStore(context)) {
             for (TaskStore.Task task : store.active()) show(context, task);
         }

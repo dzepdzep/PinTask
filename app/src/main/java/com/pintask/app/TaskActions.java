@@ -31,7 +31,8 @@ final class TaskActions {
         } else {
             item(menu, "Change / remove time…", () -> TaskTimingEditor.open(activity, task, refresh));
             if (task.shiftRunId == 0) {
-                item(menu, "Repeat daily / weekly / monthly…", () -> recurrence(activity, task, refresh, false));
+                item(menu, "Change repeat…", () -> recurrence(activity, task, refresh, false));
+                if(task.recurrence!=0) item(menu,"Skip this occurrence",()->new AlertDialog.Builder(activity).setTitle("Skip this occurrence?").setMessage("Moves to the next scheduled date without marking this task Done.").setNegativeButton("Cancel",null).setPositiveButton("Skip",(d,w)->change(activity,refresh,store->store.skipOccurrence(task.id))).show());
                 if (task.recurrence != 0) item(menu, "Stop repeating", () -> change(activity, refresh, store -> {
                     store.stopRepeating(task.id); return store.find(task.id);
                 }));
@@ -64,6 +65,15 @@ final class TaskActions {
                     TaskNotifications.cancel(activity, task.id);
                     refresh.run();
                 }).show());
+        item(menu,"Notes / checklist…",()->TaskDetails.open(activity,task,refresh));
+        if(!task.done && task.shiftRunId==0) {
+            item(menu,"Move to tomorrow",()->TaskExtras.tomorrow(activity,task,refresh));
+            if(task.recurrence>0) {
+                item(menu,task.paused?"Resume recurring task":"Pause recurring task",()->change(activity,refresh,store->store.pause(task.id,!task.paused)));
+                item(menu,"Repeat timing…",()->new AlertDialog.Builder(activity).setTitle("How should repeating work?").setSingleChoiceItems(new String[]{"Keep the scheduled pattern","Count interval after completion"},task.repeatAfter?1:0,(d,index)->{change(activity,refresh,store->{TaskStore.Task latest=store.find(task.id);return store.saveDetails(task.id,latest.notes,latest.checklist,index==1);});d.dismiss();}).setNegativeButton("Cancel",null).show());
+            }
+        }
+        item(menu,task.shiftRunId>0?"Move shift and its tasks to group…":"Move to job / patient / group…",()->TaskGroups.move(activity,task,refresh));
         menu.show();
     }
 
@@ -76,8 +86,8 @@ final class TaskActions {
                 .setMessage(copy ? "Keeps this Done record. Any already scheduled repeats stay unchanged." :
                         "The next occurrence is created when you mark this task Done.")
                 .setPositiveButton("Choose repeat", (d, w) -> new AlertDialog.Builder(activity)
-                        .setTitle("How often?").setItems(new String[]{"Daily", "Weekly", "Monthly"},
-                                (dialog, index) -> schedule(activity, task, refresh, copy, index + 1))
+                        .setTitle("How often?").setItems(new String[]{"Daily", "Weekly", "Monthly", "Every 2 weeks", "Every other day", "Every 3 days", "Every 3 weeks", "Every 4 weeks", "Yearly", "Weekdays", "Weekends", "Mon / Wed / Fri", "Selected weekdays…", "Custom…"},
+                                (dialog, index) -> {if(index==12)RepeatRules.weekdays(activity,task.recurrence,code->schedule(activity,task,refresh,copy,code));else if(index==13) RepeatRules.custom(activity,task.recurrence,code->schedule(activity,task,refresh,copy,code));else schedule(activity, task, refresh, copy, index + 1);})
                         .setNegativeButton("Cancel", null).show())
                 .setNegativeButton("Cancel", null).show();
     }
@@ -93,8 +103,8 @@ final class TaskActions {
                 selected.set(Calendar.MINUTE, min);
                 selected.set(Calendar.SECOND, 0);
                 selected.set(Calendar.MILLISECOND, 0);
-                change(activity, refresh, store -> copy ? store.repeat(task.id, selected.getTimeInMillis(), recurrence, 0) :
-                        store.updateTiming(task.id, selected.getTimeInMillis(), recurrence, 0));
+                change(activity, refresh, store -> copy ? store.repeat(task.id, selected.getTimeInMillis(), recurrence, task.notifyBeforeMinutes) :
+                        store.updateTiming(task.id, selected.getTimeInMillis(), recurrence, task.notifyBeforeMinutes));
             }, selected.get(Calendar.HOUR_OF_DAY), selected.get(Calendar.MINUTE),
                     android.text.format.DateFormat.is24HourFormat(activity)).show();
         }, selected.get(Calendar.YEAR), selected.get(Calendar.MONTH), selected.get(Calendar.DAY_OF_MONTH));
