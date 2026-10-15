@@ -51,11 +51,11 @@ public class SimpleSchedulerTest {
     }
     @Test public void changingDayNeverDeletesExistingTasks() {
         LocalDate day=LocalDate.now().plusDays(2);
-        ShiftRepository.Run run=shifts.schedule(day,"U8"); shifts.addTask(run.id,"Preserve",-1,0,-2);
+        ShiftRepository.Run run=shifts.schedule(day,"TD1"); shifts.addTask(run.id,"Preserve",-1,0,-2);
         assertThrows(IllegalArgumentException.class,()->shifts.schedule(day,"Off"));
         assertEquals("Preserve",shifts.runTasks(run.id).get(0).title);
-        assertEquals(run.id,shifts.schedule(day,"U8").id);
-        assertEquals(8*3600000L,run.endsAt-run.startsAt);
+        assertEquals(run.id,shifts.schedule(day,"TD1").id);
+        assertEquals(12*3600000L,run.endsAt-run.startsAt);
     }
     @Test public void offAndEzDoNotHideNightAndDoNotRequireHours() {
         LocalDate day=LocalDate.now().plusDays(2);

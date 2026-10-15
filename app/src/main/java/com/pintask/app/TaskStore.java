@@ -24,7 +24,7 @@ public final class TaskStore extends SQLiteOpenHelper {
     private final Context context;
 
     public TaskStore(Context context) {
-        super(context.getApplicationContext(), "pintask.db", null, 7);
+        super(context.getApplicationContext(), "pintask.db", null, 8);
         this.context=context.getApplicationContext();
     }
 
@@ -84,6 +84,7 @@ public final class TaskStore extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE tasks ADD COLUMN repeat_anchor INTEGER NOT NULL DEFAULT 0");
             createBundles(db);
         }
+        if(oldVersion<8) ShiftRepository.upgradeTables(db);
     }
 
     static void createBundles(SQLiteDatabase db) {

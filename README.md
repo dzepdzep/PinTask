@@ -1,22 +1,13 @@
-# PinTask 2.1 — Tasks · Work · More
+# PinTask 2.2 — simpler shifts and reusable task lists
 
-Three fixed bottom tabs now give each kind of activity its own home:
+- **Tasks:** simple personal tasks. Date and time are immediately visible in Add with time or repeat; advanced options stay optional.
+- **Work:** choose a job/patient and date. TD1 is 08:00–20:00, TD2 is 09:00–21:00, ND is 20:00–08:00 the next morning. Older TD entries retain 08:00–20:00. Multiple shifts can share one date. Overlapping shifts ask before keeping both.
+- **U8, EZ and Off mean no working shift.** They have no shift hours or shift tasks. Existing U8 shift records from older versions stay intact to preserve tasks and history. End an existing working entry before marking its date as no shift.
+- Open a shift card for its own task list. Add tasks there, then use **Save as template at the bottom**. This snapshots each occurrence, including completed tasks, with its relative time, reminder, priority, notes and checklist. Reuse resets completion and checklist ticks. The original shift stays unchanged.
+- **Use saved template** adds tasks directly to an existing shift with matching hours. Repeated application adds another copy and asks first. Times already past are skipped; existing tasks are retained. Templates are always optional.
+- **More:** advanced library/search, history, bundles, templates, backup and Quick Add settings. Quick Add remains off unless enabled.
 
-1. **Tasks:** a simple everyday to-do list. Type a name and tap Add, or use Add with time or repeat when needed. Personal tasks are ungrouped and remain separate from the selected work group.
-2. **Work:** jobs/patients, shift planning and work tasks. Choose a job/patient, tap Set a shift, choose a date and shift, and add work tasks to a shift or group. Existing shift-linked and named-group tasks appear here. Work tasks without a selected group/shift use the Work group.
-3. **More:** task library/search, completed history, bundles, optional shift templates, Quick Add settings and backup/restore.
-
-The screens use a consistent dark navy/mint palette, rounded cards, clear page headings and large bottom navigation targets. Personal and work date selection are independent; unfinished task text and editor options survive rotation and page changes. Work notification and widget task taps open the right page and group. No database upgrade or existing-task rewrite is needed. All reminder, recurrence, notes/checklist, pause/resume and Undo behavior is retained. Quick Add remains off unless explicitly enabled.
-
-## Earlier 2.0 behavior retained
-
-- The app now opens directly to **Today**. The task library is under **More → All tasks and search**.
-- **Today:** a shift summary, compact task rows with completion checkboxes, and Add task. Tap a task name for notes/checklists, or its overflow for task actions.
-- **Schedule:** tap a calendar date, then **Choose shift**. TD, ND, U8, EZ and Off are in one picker. After selecting a working shift, tap Add task. Existing-shift management is behind its Change control. Templates are under More → Saved templates.
-- **Add Task:** name, optional time and Save. Date/shift selection, reminders, repeat and custom weekdays are collapsed under **More options**. Draft text, timing and option state survive rotation.
-- **More** holds job/patient selection, task bundles, search, history, saved templates, Quick Add settings and backup. Existing data and these features remain available.
-- **Quick Add notification now requires fresh opt-in.** Older quick_add settings no longer enable it. Upgrade/boot/app refresh clears the known shortcut ID, tagged copies and older shortcut notifications identified by their inline Quick Add input; ordinary task notifications are preserved. To explicitly enable it: More → Quick Add notification → On. Off removes it and cancels its old action intent.
-- The application ID, database v7 and signing identity are unchanged. Install this APK as an update; no uninstall is needed.
+Database v8 adds an explicit day-label flag and optional template notes/checklists. Upgrades and older backups retain existing task IDs, reminder choices, shifts and template data. Signed releases install over prior signed releases without uninstalling. Back up before changing installations; uninstalling deletes local data.
 
 ## Earlier v1.9 features retained
 
@@ -41,7 +32,7 @@ The screens use a consistent dark navy/mint palette, rounded cards, clear page h
 ## PinTask v1.7 features retained
 
 - Open **Shifts** for **Today**, **Schedule**, and **Add Task**.
-- Schedule TD 08:00–20:00, ND 20:00–08:00 the following morning, U8 08:00–16:00, EZ without fixed hours, or Off. No template or task is required to schedule a day. Existing templates remain under Optional templates.
+- Originally supported TD/ND and U8 working shifts. Version 2.2 corrects new U8/EZ entries to no-shift labels and adds TD1/TD2 as described above. No template or task is required to schedule a day. Existing templates remain under Optional templates.
 - Choose **Job / patient** to create and select a named group. All tasks shows every group; Ungrouped contains old tasks and items created while All tasks is selected. Personal tasks can move individually; moving a shift task moves its whole shift and all its tasks, as the menu states. Group filters affect lists and the widget, never reminder delivery.
 - The **Persistent Quick Add notification** switch on the main screen starts off. Enabling it restores the notification shortcut; disabling it immediately removes that shortcut. Task reminders and the widget's Add button continue to work.
 - Add Task needs only a name. Time, reminder, and repeat are optional. New tasks default to No reminder; old tasks keep their notification behavior.
@@ -61,7 +52,7 @@ The screens use a consistent dark navy/mint palette, rounded cards, clear page h
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 2.1
+## Build and install 2.2
 
 Actions → Build installable Android APK → Run workflow. Download the **PinTask-installable-apk** artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 

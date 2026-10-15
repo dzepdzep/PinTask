@@ -59,6 +59,8 @@ final class BackupData {
             for(int i=0;i<input.length();i++) {
                 JSONObject row=input.getJSONObject(i);
                 if(columns.contains("task_group") && !row.has("task_group")) row.put("task_group","");
+                if(table.equals("shift_runs") && !row.has("day_label"))row.put("day_label",row.optLong("template_id")==0 && (row.optString("label").equals("EZ") || row.optString("label").equals("Off"))?1:0);
+                if(table.equals("shift_steps")){if(!row.has("notes"))row.put("notes","");if(!row.has("checklist"))row.put("checklist","[]");}
                 if(table.equals("tasks")) {
                     if(!row.has("notes"))row.put("notes","");if(!row.has("checklist"))row.put("checklist","[]");
                     if(!row.has("paused"))row.put("paused",0);if(!row.has("repeat_after"))row.put("repeat_after",0);if(!row.has("repeat_anchor"))row.put("repeat_anchor",0);
@@ -83,11 +85,11 @@ final class BackupData {
                     }
                 }
                 if(values.getAsLong("_id")<=0 || values.getAsLong("_id")>=999_999_999) throw new IllegalArgumentException("Invalid record ID");
-                if(table.equals("tasks"))TaskDetails.validate(values.getAsString("checklist"));
+                if(table.equals("tasks") || table.equals("shift_steps"))TaskDetails.validate(values.getAsString("checklist"));
                 if(table.equals("bundles")){TaskBundles.validate(values.getAsString("payload"));if(values.getAsString("name").length()>80)throw new IllegalArgumentException("Bundle name is too long");}
                 range(values,"paused",0,1);range(values,"repeat_after",0,1);
                 range(values,"priority",0,2); range(values,"done",0,2); if(values.containsKey("recurrence") && (values.getAsLong("recurrence")>Integer.MAX_VALUE || !RepeatRules.valid(values.getAsInteger("recurrence")))) throw new IllegalArgumentException("Invalid recurrence");
-                range(values,"ended",0,1); range(values,"start_min",0,1439); range(values,"duration_min",1,1440);
+                range(values,"day_label",0,1);range(values,"ended",0,1); range(values,"start_min",0,1439); range(values,"duration_min",1,1440);
                 range(values,"first_min",-1,1439);
                 allowed(values,"every_min",new long[]{0,30,60,120,180,240});
                 allowed(values,"notify_before_min",new long[]{-2,-1,0,5,10,15,30,60});
