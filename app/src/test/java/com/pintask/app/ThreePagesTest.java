@@ -78,6 +78,12 @@ public class ThreePagesTest {
             View root=controller.get().getWindow().getDecorView();firstEntry(root).setText("Draft shopping");controller.newIntent(TaskSections.openIntent(context,work.id));root=controller.get().getWindow().getDecorView();assertTrue(tab(root,"Work").isSelected());tab(root,"Tasks").performClick();assertEquals("Draft shopping",firstEntry(controller.get().getWindow().getDecorView()).getText().toString());
         }
     }
+    @Test public void simpleInlineAddRefreshesTheExistingHomeScreenWidget() {
+        android.appwidget.AppWidgetManager manager=android.appwidget.AppWidgetManager.getInstance(context);int widget=Shadows.shadowOf(manager).createWidget(TaskWidget.class,R.layout.task_widget);
+        try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
+            View root=controller.get().getWindow().getDecorView();firstEntry(root).setText("New widget task");find(root,"Add").performClick();TextView title=Shadows.shadowOf(manager).getViewFor(widget).findViewById(R.id.widget_task_title);assertNotNull(title);assertEquals("New widget task",title.getText().toString());
+        }
+    }
     private View tab(View view,String label){if((label+" page").contentEquals(view.getContentDescription()==null?"":view.getContentDescription()))return view;if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){View result=tab(((ViewGroup)view).getChildAt(i),label);if(result!=null)return result;}return null;}
     private TextView find(View view,String text){if(view instanceof TextView && text.contentEquals(((TextView)view).getText()))return (TextView)view;if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){TextView result=find(((ViewGroup)view).getChildAt(i),text);if(result!=null)return result;}return null;}
     private EditText firstEntry(View view){if(view instanceof EditText)return (EditText)view;if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){EditText result=firstEntry(((ViewGroup)view).getChildAt(i));if(result!=null)return result;}return null;}

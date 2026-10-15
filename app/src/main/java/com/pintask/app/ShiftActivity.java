@@ -72,7 +72,7 @@ public final class ShiftActivity extends Activity {
     }
     private void quickAdd(){
         String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
-        try(TaskStore store=new TaskStore(this)){TaskSections.addPersonal(store,title);}quickDraft="";hideKeyboard();render();
+        try(TaskStore store=new TaskStore(this)){TaskSections.addPersonal(store,title);}TaskWidget.refreshAll(this);quickDraft="";hideKeyboard();render();
     }
     private void workPage(){
         heading("Work","Shifts, jobs and patients");
