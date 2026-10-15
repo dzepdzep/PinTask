@@ -50,6 +50,8 @@ public final class TaskActionReceiver extends BroadcastReceiver {
                 TaskNotifications.show(context,store.find(id)); ReminderScheduler.schedule(context,store.find(id));
             } catch(IllegalArgumentException e) { android.widget.Toast.makeText(context,e.getMessage(),android.widget.Toast.LENGTH_LONG).show(); }
         } else if (TaskNotifications.ACTION_DISMISSED.equals(action)) {
+            // A swipe on either device dismisses a watch-compatible card, never completes its task.
+            if(TaskNotifications.watchEnabled(context))return;
             // Best effort only: OS or OEM battery management can prevent re-posting.
             PendingResult pending = goAsync();
             Context app = context.getApplicationContext();

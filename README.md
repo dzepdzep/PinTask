@@ -1,4 +1,8 @@
-# PinTask 2.3 — faster work planning
+# PinTask 2.4 — Done from your Wear OS watch
+
+- **Wear OS notifications:** task/reminder cards now allow phone-to-watch bridging and expose a watch-specific **Done** action. Open a PinTask notification on the watch and tap Done; the connected phone completes the task, clears its notifications and creates the next repeat once. A brief Undo notification is also available. No separate watch app is required for this notification action.
+- Enable PinTask notifications in Galaxy Wearable, Google Pixel Watch or your watch companion app. Watch delivery still depends on pairing/connectivity, Android notification permission, companion notification filters and watch notification settings.
+- **More → Watch notifications** defaults to Phone + watch. Watch-compatible cards must be clearable: Wear OS excludes ongoing/non-clearable cards. Swiping dismisses a card without completing the task; it remains in PinTask and may reappear when notifications refresh. Choose **Phone only, pinned** for the previous pinned-phone behavior. This setting does not turn silent tasks into reminders or change alert times. Quick Add is still opt-in/off by default.
 
 - **Tasks:** simple personal tasks. Date and time are immediately visible in Add with time or repeat; advanced options stay optional.
 - **Work:** choose a job/patient and date. TD1 is 08:00–20:00, TD2 is 09:00–21:00, ND is 20:00–08:00 the next morning. Older TD entries retain 08:00–20:00. Multiple shifts can share one date. Overlapping shifts ask before keeping both.
@@ -55,7 +59,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 2.3
+## Build and install 2.4
 
 Actions → Build installable Android APK → Run workflow. Download the **PinTask-installable-apk** artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
@@ -72,3 +76,4 @@ Actions → Build installable Android APK → Run workflow. Download the **PinTa
 Requires Java 17, Gradle 8.13, Android SDK 36 and Build Tools 35.0.0. Run `gradle :app:testDebugUnitTest :app:assembleDebug` for a local debug build. Release builds use PINTASK_KEYSTORE_PATH and PINTASK_KEYSTORE_PASSWORD; the alias is pintask. Keep the permanent signing key backed up privately.
 
 Tests cover task entry, optional timing, Done/repeat, favorites, snooze, undo, filters, database migration, backup rollback, independent shift copies and widget completion. The workflow also runs the standalone ShiftTimesTest for overnight and daylight-saving behavior and verifies the release APK signature.
+Wear OS bridging rules: https://developer.android.com/training/wearables/notifications/bridger

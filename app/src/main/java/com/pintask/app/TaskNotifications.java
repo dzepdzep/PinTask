@@ -15,7 +15,7 @@ import android.os.Build;
 import java.text.DateFormat;
 import java.util.Date;
 
-/** Pinned task notifications, separate alert reminders, and inline Quick Add. */
+/** Watch-compatible task notifications, optional phone-only pinning, and inline Quick Add. */
 public final class TaskNotifications {
     public static final String CHANNEL = "unfinished_tasks";
     public static final String REMINDER_CHANNEL = "due_reminders_v2";
@@ -65,7 +65,29 @@ public final class TaskNotifications {
         PendingIntent callback = PendingIntent.getBroadcast(context, (int) id, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         return new Notification.Action.Builder(
-                Icon.createWithResource(context, R.drawable.ic_check), "Done", callback).build();
+                Icon.createWithResource(context, R.drawable.ic_check), "Done", callback)
+                .extend(new Notification.Action.WearableExtender().setHintLaunchesActivity(false).setAvailableOffline(false)).build();
+    }
+
+    public static boolean watchEnabled(Context context) {
+        return context.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean("watch_notifications",true);
+    }
+    public static void setWatchEnabled(Context context,boolean enabled) {
+        context.getSharedPreferences("settings",Context.MODE_PRIVATE).edit().putBoolean("watch_notifications",enabled).apply();
+        // Update existing cards in place, including already-delivered legacy due alerts.
+        NotificationManager manager=context.getSystemService(NotificationManager.class);
+        java.util.Set<Integer> dueIds=new java.util.HashSet<>();
+        if(manager!=null)for(android.service.notification.StatusBarNotification active:manager.getActiveNotifications())
+            if(active.getTag()==null && active.getId()>=REMINDER_OFFSET && active.getId()<QUICK_ID)dueIds.add(active.getId());
+        syncAll(context);
+        try(TaskStore store=new TaskStore(context)) {
+            for(TaskStore.Task task:store.activeAll())if(dueIds.contains(REMINDER_OFFSET+(int)task.id) && task.reminderEnabled())showDue(context,task);
+        }
+    }
+
+    private static Notification.WearableExtender watchActions(Notification.Action action) {
+        // Replace phone actions on the watch: Snooze opens a phone activity, Done does not.
+        return new Notification.WearableExtender().addAction(action);
     }
 
     private static String priorityText(int priority) {
@@ -100,6 +122,8 @@ public final class TaskNotifications {
         // Use the reminder channel for scheduled arrivals, so the first notification alerts.
         String channel = task.snoozedUntil > 0 || (task.notifyBeforeMinutes >= 0 && task.dueAt > 0)
                 ? REMINDER_CHANNEL : CHANNEL;
+        boolean watch=watchEnabled(context);
+        Notification.Action done=doneAction(context,task.id);
         Notification notification = new Notification.Builder(context, channel)
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle(task.title)
@@ -109,19 +133,22 @@ public final class TaskNotifications {
                 .setContentIntent(open(context,task.id))
                 .setDeleteIntent(dismissed)
                 .setAutoCancel(false)
-                .setOngoing(true)
+                .setOngoing(!watch)
+                .setLocalOnly(!watch)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(true)
                 .setWhen(task.createdAt)
-                .addAction(doneAction(context, task.id)).addAction(snoozeAction(context, task.id)).build();
+                .addAction(done).addAction(snoozeAction(context, task.id))
+                .extend(watchActions(done)).build();
         // Android 14+ permits individual dismissal despite these flags.
-        notification.flags |= Notification.FLAG_NO_CLEAR;
+        if(!watch)notification.flags |= Notification.FLAG_NO_CLEAR;
         context.getSystemService(NotificationManager.class).notify((int) task.id, notification);
     }
 
     public static void showDue(Context context, TaskStore.Task task) {
         if (!canNotify(context)) return;
         ensureChannel(context);
+        Notification.Action done=doneAction(context,task.id);
         Notification notification = new Notification.Builder(context, REMINDER_CHANNEL)
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle("Due now: " + task.title)
@@ -129,7 +156,9 @@ public final class TaskNotifications {
                 .setContentIntent(open(context,task.id))
                 .setCategory(Notification.CATEGORY_REMINDER)
                 .setAutoCancel(true)
-                .addAction(doneAction(context, task.id)).addAction(snoozeAction(context, task.id)).build();
+                .setLocalOnly(!watchEnabled(context))
+                .addAction(done).addAction(snoozeAction(context, task.id))
+                .extend(watchActions(done)).build();
         context.getSystemService(NotificationManager.class)
                 .notify(REMINDER_OFFSET + (int) task.id, notification);
     }
@@ -139,10 +168,12 @@ public final class TaskNotifications {
         ensureChannel(context);
         Intent intent=new Intent(context,TaskActionReceiver.class).setAction(ACTION_UNDO).putExtra(EXTRA_ID,id);
         PendingIntent undo=PendingIntent.getBroadcast(context,(int)id,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        Notification.Action undoAction=new Notification.Action.Builder(Icon.createWithResource(context,R.drawable.ic_pin),"Undo",undo)
+                .extend(new Notification.Action.WearableExtender().setHintLaunchesActivity(false).setAvailableOffline(false)).build();
         Notification notification=new Notification.Builder(context,CHANNEL).setSmallIcon(R.drawable.ic_check)
                 .setContentTitle("Task completed").setContentText("Undo is available for 10 seconds")
                 .setTimeoutAfter(10_000).setContentIntent(open(context,id))
-                .addAction(new Notification.Action.Builder(Icon.createWithResource(context,R.drawable.ic_pin),"Undo",undo).build()).build();
+                .setLocalOnly(!watchEnabled(context)).addAction(undoAction).extend(watchActions(undoAction)).build();
         context.getSystemService(NotificationManager.class).notify("undo",(int)id,notification);
     }
 
@@ -206,7 +237,7 @@ public final class TaskNotifications {
         showQuickAdd(context);
         if (!canNotify(context)) return;
         try (TaskStore store = new TaskStore(context)) {
-            for (TaskStore.Task task : store.active()) show(context, task);
+            for (TaskStore.Task task : store.activeAll()) show(context, task);
         }
     }
 
