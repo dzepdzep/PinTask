@@ -28,7 +28,7 @@ public final class TaskWidget extends AppWidgetProvider {
                 int visible=Math.max(1,Math.min(5,(height-136)/48));
                 RemoteViews view = new RemoteViews(context.getPackageName(),R.layout.task_widget);
                 view.setTextViewText(R.id.widget_title,"PinTask · " + tasks.size() + " tasks");
-                view.setOnClickPendingIntent(R.id.widget_title, PendingIntent.getActivity(context,0,new Intent(context,ShiftActivity.class),PendingIntent.FLAG_IMMUTABLE));
+                view.setOnClickPendingIntent(R.id.widget_title, PendingIntent.getActivity(context,0,new Intent(context,ShiftActivity.class).putExtra("open_work",!tasks.isEmpty() && TaskSections.isWork(tasks.get(0))).setData(android.net.Uri.parse("pintask://widget/"+id)).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
                 view.setOnClickPendingIntent(R.id.widget_add, PendingIntent.getActivity(context,0,new Intent(context,QuickAddActivity.class),PendingIntent.FLAG_IMMUTABLE));
                 view.removeAllViews(R.id.widget_tasks);
                 if (tasks.isEmpty()) view.setTextViewText(R.id.widget_empty,"All done. Add a task above.");
@@ -37,7 +37,7 @@ public final class TaskWidget extends AppWidgetProvider {
                     TaskStore.Task task = tasks.get(i);
                     RemoteViews row = new RemoteViews(context.getPackageName(),R.layout.widget_task);
                     row.setTextViewText(R.id.widget_task_title,task.title);
-                    row.setOnClickPendingIntent(R.id.widget_task_title, PendingIntent.getActivity(context,0,new Intent(context,ShiftActivity.class),PendingIntent.FLAG_IMMUTABLE));
+                    row.setOnClickPendingIntent(R.id.widget_task_title, PendingIntent.getActivity(context,(int)task.id,TaskSections.openIntent(context,task.id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
                     Intent done = new Intent(context,TaskActionReceiver.class).setAction(TaskNotifications.ACTION_DONE).putExtra(TaskNotifications.EXTRA_ID,task.id);
                     row.setOnClickPendingIntent(R.id.widget_done,PendingIntent.getBroadcast(context,(int)task.id,done,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
                     view.addView(R.id.widget_tasks,row);

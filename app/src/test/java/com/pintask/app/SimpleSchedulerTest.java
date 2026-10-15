@@ -93,14 +93,16 @@ public class SimpleSchedulerTest {
     @Test public void threeScreensAndTitleOnlyTaskSurviveRecreation() {
         try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
             View root=controller.get().getWindow().getDecorView();
-            find(root,"Add Task").performClick();
+            find(root,"Add with time or repeat").performClick();
             EditText entry=entry(controller.get().getWindow().getDecorView()); entry.setText("Simple task");
             controller.recreate(); root=controller.get().getWindow().getDecorView();
             assertEquals("Simple task",entry(root).getText().toString());
             find(root,"Save task").performClick();
             assertEquals(1,store.activePersonal().size()); assertEquals(-2,store.activePersonal().get(0).notifyBeforeMinutes);
-            find(controller.get().getWindow().getDecorView(),"Schedule").performClick();
-            find(controller.get().getWindow().getDecorView(),"Choose shift").performClick();
+            find(controller.get().getWindow().getDecorView(),"Work").performClick();
+            find(controller.get().getWindow().getDecorView(),"Set a shift").performClick();
+            android.app.DatePickerDialog datePicker=(android.app.DatePickerDialog)org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();datePicker.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             android.app.AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
             assertEquals("ND · 20:00–08:00 next day",dialog.getListView().getAdapter().getItem(1));
         }

@@ -33,7 +33,7 @@ public class SimplerHomeTest {
         Intent launch=context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());assertNotNull(launch);assertEquals(ShiftActivity.class.getName(),launch.getComponent().getClassName());
         try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
             View root=controller.get().getWindow().getDecorView();assertNotNull(find(root,"More"));assertNull(find(root,"Task bundles"));assertNull(find(root,"Optional templates"));
-            find(root,"Add Task").performClick();root=controller.get().getWindow().getDecorView();
+            find(root,"Add with time or repeat").performClick();root=controller.get().getWindow().getDecorView();
             assertEquals(View.GONE,find(root,"Reminder · Optional").getParent() instanceof View?((View)find(root,"Reminder · Optional").getParent()).getVisibility():-1);
             assertFalse(find(root,"Custom repeat…").isShown());
             firstEntry(root).setText("Keep draft");find(root,"More options").performClick();root=controller.get().getWindow().getDecorView();assertEquals(View.VISIBLE,((View)find(root,"Reminder · Optional").getParent()).getVisibility());
@@ -42,8 +42,10 @@ public class SimplerHomeTest {
     }
     @Test public void calendarShiftPickerCreatesPlanWithoutShowingTemplateEditorOrTaskForm() {
         try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
-            find(controller.get().getWindow().getDecorView(),"Schedule").performClick();View root=controller.get().getWindow().getDecorView();assertNull(find(root,"Optional templates"));assertNull(find(root,"End / clear TD"));
-            find(root,"Choose shift").performClick();AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            find(controller.get().getWindow().getDecorView(),"Work").performClick();
+            find(controller.get().getWindow().getDecorView(),"Set a shift").performClick();View root=controller.get().getWindow().getDecorView();assertNull(find(root,"Optional templates"));assertNull(find(root,"End / clear TD"));
+            android.app.DatePickerDialog datePicker=(android.app.DatePickerDialog)org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();datePicker.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             dialog.getListView().performItemClick(dialog.getListView().getChildAt(1),1,1);
             try(ShiftRepository shifts=new ShiftRepository(context)){assertEquals("ND",shifts.runsForDate(java.time.LocalDate.now()).get(0).label);assertTrue(shifts.templates().isEmpty());}
         }

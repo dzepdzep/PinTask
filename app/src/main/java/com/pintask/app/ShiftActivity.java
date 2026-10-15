@@ -1,152 +1,109 @@
 package com.pintask.app;
 
 import android.Manifest;
-import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.DatePickerDialog;
-import android.app.TimePickerDialog;
+import android.app.*;
 import android.content.Intent;
 import android.graphics.Color;
-import android.os.Build;
-import android.os.Bundle;
-import android.view.View;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.*;
+import android.view.*;
 import android.widget.*;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
-/** Simple calendar workflow backed by the original task and shift tables. */
+/** Three destinations: everyday Tasks, Work, and advanced More. */
 public final class ShiftActivity extends Activity {
+    private static final int TASKS=0, WORK=1, MORE=2, EDITOR=3, HISTORY=4;
+    private static final int BG=Color.rgb(12,18,30),SURFACE=Color.rgb(24,34,51),BORDER=Color.rgb(43,57,76);
+    private static final int FG=Color.rgb(238,244,251),MUTED=Color.rgb(156,173,194),ACCENT=Color.rgb(166,233,205);
+    private static final int[] EARLY={-2,0,5,10,15,30,60},INTERVALS={0,30,60,120,180,240};
     private ShiftRepository repository;
     private LinearLayout body;
     private UndoBar undoBar;
-    private int screen=0;
-    private LocalDate date=LocalDate.now();
+    private int screen=TASKS,subpage=0;
+    private LocalDate date=LocalDate.now(),editorDate=LocalDate.now();
     private long taskRun=0;
-    private String draft="";
-    private int minute=-1, reminder=0, repeat=0;
-    private EditText name;
-    private boolean moreOptions;
-    private Spinner reminders, repeats;
-    private static final int[] EARLY={-2,0,5,10,15,30,60};
-    private static final int[] INTERVALS={0,30,60,120,180,240};
-    private static final int BG=Color.rgb(13,18,26), FG=Color.rgb(240,244,249);
+    private String draft="",quickDraft="",editorGroup="";
+    private int minute=-1,reminder=0,repeat=0;
+    private boolean moreOptions,workEditor;
+    private EditText name,quickEntry;
+    private Spinner reminders,repeats;
 
     @Override public void onCreate(Bundle state) {
-        super.onCreate(state);
-        repository=new ShiftRepository(this);
-        if(state!=null) {
-            screen=state.getInt("screen"); date=LocalDate.parse(state.getString("date"));
-            taskRun=state.getLong("run"); draft=state.getString("draft","");
-            minute=state.getInt("minute",-1); reminder=state.getInt("reminder"); repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");
-        }
-        render();
+        super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);
+        if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);reminder=state.getInt("reminder");repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
+        if(state==null)routeIntent(getIntent());render();
     }
-    @Override protected void onResume() {
-        super.onResume();
-        TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
-        if(repository!=null && screen!=2) render();
+    @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}}
+    @Override protected void onDestroy(){repository.close();super.onDestroy();}
+    private void routeIntent(Intent intent){
+        long id=intent.getLongExtra("open_task",0);
+        if(id>0){try(TaskStore store=new TaskStore(this)){TaskStore.Task task=store.find(id);if(task!=null){if(TaskSections.isWork(task)){TaskGroups.select(this,task.group);ShiftRepository.Run run=task.shiftRunId>0?repository.findRun(task.shiftRunId):null;if(run!=null)date=dateOf(run.startsAt);screen=task.done?HISTORY:WORK;}else screen=task.done?HISTORY:TASKS;}}}
+        else if(intent.getBooleanExtra("open_work",false))screen=WORK;
     }
-    @Override protected void onDestroy() { repository.close(); super.onDestroy(); }
-    private void remember() {
-        if(name!=null) { draft=name.getText().toString(); reminder=reminders.getSelectedItemPosition(); repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition(); }
-    }
-    @Override protected void onSaveInstanceState(Bundle state) {
-        remember(); state.putInt("screen",screen); state.putString("date",date.toString());
-        state.putLong("run",taskRun); state.putString("draft",draft); state.putInt("minute",minute);
-        state.putInt("reminder",reminder); state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions); super.onSaveInstanceState(state);
-    }
-    @Override public void onBackPressed() { if(screen!=0) { remember(); screen=0; render(); } else super.onBackPressed(); }
-    private void render() {
-        name=null;
-        LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setBackgroundColor(BG);
-        root.setPadding(dp(16),dp(20),dp(16),dp(16));
-        if(Build.VERSION.SDK_INT>=30) root.setOnApplyWindowInsetsListener((v,insets)->{
-            android.graphics.Insets bars=insets.getInsets(android.view.WindowInsets.Type.systemBars());
-            v.setPadding(dp(16)+bars.left,dp(20)+bars.top,dp(16)+bars.right,dp(16)+bars.bottom);return insets;
-        }); else root.setFitsSystemWindows(true);
+    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);remember();setIntent(intent);routeIntent(intent);render();}
+    private void remember(){if(quickEntry!=null)quickDraft=quickEntry.getText().toString();if(name!=null){draft=name.getText().toString();reminder=reminders.getSelectedItemPosition();repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition();}}
+    @Override protected void onSaveInstanceState(Bundle state){remember();state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("reminder",reminder);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);super.onSaveInstanceState(state);}
+    @Override public void onBackPressed(){remember();if(screen==EDITOR)screen=workEditor?WORK:TASKS;else if(screen==HISTORY)screen=MORE;else if(screen==WORK && subpage!=0)subpage=0;else if(screen!=TASKS)screen=TASKS;else{super.onBackPressed();return;}render();}
+    private void navigate(int page){remember();screen=page;subpage=0;render();}
+    private void render(){
+        name=null;quickEntry=null;
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
+        if(Build.VERSION.SDK_INT>=30)root.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());int keyboard=insets.getInsets(WindowInsets.Type.ime()).bottom;v.setPadding(bars.left,bars.top,bars.right,Math.max(bars.bottom,keyboard));return insets;});else root.setFitsSystemWindows(true);
         setContentView(root);
-        LinearLayout nav=new LinearLayout(this); root.addView(nav);
-        String[] tabs={"Today","Schedule","Add Task"};
-        for(int i=0;i<tabs.length;i++) {
-            final int page=i; Button tab=new Button(this); tab.setText(tabs[i]); tab.setAllCaps(false);
-            tab.setTextColor(screen==i?Color.rgb(175,241,138):FG); nav.addView(tab,new LinearLayout.LayoutParams(0,-2,1));
-            tab.setOnClickListener(v->{ if(page==screen)return; remember(); if(page==2 && draft.isEmpty()) { moreOptions=false; ShiftRepository.Run current=repository.currentRun(); taskRun=current==null?0:current.id; date=LocalDate.now(); repeat=0; } screen=page; render(); });
-        }
-        ScrollView scroll=new ScrollView(this); root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        body=new LinearLayout(this); body.setOrientation(LinearLayout.VERTICAL); body.setPadding(0,dp(16),0,dp(24)); scroll.addView(body);
-        undoBar=new UndoBar(this); root.addView(undoBar);
-        header();
-        if(screen==0) today(); else if(screen==1) schedule(); else addTask();
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(20),dp(24),dp(20),dp(24));scroll.addView(body);
+        if(screen==TASKS)tasksPage();else if(screen==WORK)workPage();else if(screen==MORE)morePage();else if(screen==HISTORY)historyPage();else addTask();
+        undoBar=new UndoBar(this);root.addView(undoBar);
+        LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(12),dp(8),dp(12),dp(10));nav.setBackgroundColor(Color.rgb(16,24,38));root.addView(nav);
+        String[] labels={"Tasks","Work","More"};int selected=screen==EDITOR?(workEditor?WORK:TASKS):screen==HISTORY?MORE:screen;
+        for(int i=0;i<labels.length;i++){final int page=i;TextView tab=new TextView(this);tab.setText(labels[i]);tab.setGravity(Gravity.CENTER);tab.setTextSize(15);tab.setTypeface(Typeface.DEFAULT,selected==i?Typeface.BOLD:Typeface.NORMAL);tab.setTextColor(selected==i?ACCENT:MUTED);tab.setBackground(shape(selected==i?SURFACE:Color.TRANSPARENT,14));tab.setContentDescription(labels[i]+" page");tab.setFocusable(true);tab.setSelected(selected==i);nav.addView(tab,new LinearLayout.LayoutParams(0,dp(52),1));tab.setOnClickListener(v->navigate(page));}
     }
-    private void today() {
-        text("Today · "+LocalDate.now().format(DateTimeFormatter.ofPattern("EEE, d MMM")),22);
-        ShiftRepository.Run current=repository.currentRun();
-        if(current!=null) { action("Current: "+summary(current),()->{date=dateOf(current.startsAt);screen=1;render();});showTasks(repository.runTasks(current.id)); }
-        else if(repository.runsForDate(LocalDate.now()).isEmpty())action("Choose today’s shift",()->{date=LocalDate.now();screen=1;render();});
-        for(ShiftRepository.Run run:repository.runsForDate(LocalDate.now())) {
-            if(current==null || run.id!=current.id) { action(summary(run),()->{date=dateOf(run.startsAt);screen=1;render();});showTasks(repository.runTasks(run.id)); }
-        }
-        long tomorrow=LocalDate.now().plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli();
-        try(TaskStore store=new TaskStore(this)) {
-            List<TaskStore.Task> personal=new ArrayList<>(), earlier=new ArrayList<>();
-            for(TaskStore.Task task:TaskGroups.filter(this,store.active())) {
-                if(task.shiftRunId==0 && (task.dueAt==0 || task.dueAt<tomorrow)) personal.add(task);
-                if(task.shiftRunId>0) {
-                    ShiftRepository.Run run=repository.findRun(task.shiftRunId);
-                    if(run!=null && run.endsAt<=System.currentTimeMillis() && !dateOf(run.startsAt).equals(LocalDate.now())) earlier.add(task);
-                }
-            }
-            showTasks(personal);
-            if(!earlier.isEmpty()) { text("Unfinished from earlier shifts",18); showTasks(earlier); }
-        }
-        action("Add task",()->{ taskRun=current==null?0:current.id; date=LocalDate.now(); repeat=0; screen=2; render(); });
+    private void tasksPage(){
+        heading("Tasks","Your everyday to-do list");
+        LinearLayout compose=card();LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);compose.addView(row);
+        quickEntry=new EditText(this);quickEntry.setSingleLine(true);quickEntry.setText(quickDraft);quickEntry.setHint("What needs doing?");quickEntry.setTextColor(FG);quickEntry.setHintTextColor(MUTED);quickEntry.setTextSize(16);quickEntry.setBackgroundColor(Color.TRANSPARENT);quickEntry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)});row.addView(quickEntry,new LinearLayout.LayoutParams(0,dp(52),1));
+        Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(78),dp(48)));add.setOnClickListener(v->quickAdd());
+        quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
+        link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
+        try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.personal(store.activeAll());if(tasks.isEmpty())empty("A little space to breathe","Add your first task above.");else{section(tasks.size()+" to do");showTasks(tasks);}}
     }
-    private void header() {
-        LinearLayout row=new LinearLayout(this);
-        TextView group=new TextView(this);String selected=TaskGroups.selected(this);group.setText(selected==null?"All groups":selected.isEmpty()?"Ungrouped":selected);group.setTextColor(FG);group.setTextSize(14);group.setPadding(dp(8),dp(12),0,dp(12));
-        group.setOnClickListener(v->{remember();TaskGroups.choose(this,()->{taskRun=0;repeat=0;render();});});row.addView(group,new LinearLayout.LayoutParams(0,-2,1));
-        Button more=new Button(this);more.setText("More");more.setAllCaps(false);row.addView(more);more.setOnClickListener(v->moreMenu(more));body.addView(row);
+    private void quickAdd(){
+        String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
+        try(TaskStore store=new TaskStore(this)){TaskSections.addPersonal(store,title);}quickDraft="";hideKeyboard();render();
     }
-    private void moreMenu(View anchor) {
-        PopupMenu menu=new PopupMenu(this,anchor);
-        menu.getMenu().add("Change job / patient").setOnMenuItemClickListener(i->{remember();TaskGroups.choose(this,()->{taskRun=0;repeat=0;render();});return true;});
-        menu.getMenu().add("All tasks and search").setOnMenuItemClickListener(i->{startActivity(new Intent(this,MainActivity.class).putExtra("search_all",true));return true;});
-        menu.getMenu().add("Task bundles").setOnMenuItemClickListener(i->{TaskBundles.show(this,this::render);return true;});
-        menu.getMenu().add("Completed tasks").setOnMenuItemClickListener(i->{remember();showHistory();return true;});
-        menu.getMenu().add("Saved templates").setOnMenuItemClickListener(i->{startActivity(new Intent(this,LegacyShiftActivity.class));return true;});
-        menu.getMenu().add("Quick Add notification: "+(TaskNotifications.quickAddEnabled(this)?"On":"Off")).setOnMenuItemClickListener(i->{
-            new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{
-                TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();
-                if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},41);
-            }).setNegativeButton("Cancel",null).show();return true;
-        });
-        menu.getMenu().add("Backup").setOnMenuItemClickListener(i->{startActivity(new Intent(this,BackupActivity.class));return true;});menu.show();
+    private void workPage(){
+        heading("Work","Shifts, jobs and patients");
+        String group=TaskGroups.selected(this);action("Job / patient: "+(group==null?"All work":group.isEmpty()?"Unassigned":group),()->{remember();TaskGroups.chooseWork(this,()->{taskRun=0;render();});});
+        ShiftRepository.Run run=workRun();LinearLayout shift=card();LinearLayout previous=body;body=shift;
+        text((run==null?date:dateOf(run.startsAt)).format(DateTimeFormatter.ofPattern("EEE, d MMM")),13);TextView shiftTitle=text(run==null?"No shift selected":summary(run)+"  ›",19);if(run!=null){shiftTitle.setOnClickListener(v->shiftMenu(run));shiftTitle.setContentDescription("Shift options");}text(run==null?"Choose your working days in the calendar.":"Your shift and job tasks are below.",13);
+        action("Set a shift",this::pickWorkDate);body=previous;
+        primary("Add work task",()->openEditor(true,run!=null && working(run) && run.endsAt>System.currentTimeMillis()?run.id:0));
+        try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.work(this,store.activeAll());if(tasks.isEmpty())empty("Work tasks live here","Choose a job or patient, or add a task to a shift.");else{section(tasks.size()+" work tasks");showTasks(tasks);}}
     }
-    private void showHistory() {
-        body.removeAllViews();header();text("Completed tasks",22);
-        try(TaskStore store=new TaskStore(this)){for(TaskStore.Task task:TaskGroups.filter(this,store.completedAll()))body.addView(TaskCards.done(this,task,this::showHistory));}
-        action("Back to Today",()->{screen=0;render();});
+    private ShiftRepository.Run workRun(){
+        ShiftRepository.Run current=repository.currentRun();if(current!=null && date.equals(LocalDate.now()))return current;
+        List<ShiftRepository.Run> plans=repository.runsForDate(date);return plans.isEmpty()?null:plans.get(0);
     }
-    private void schedule() {
-        text("Schedule",22);
-        CalendarView calendar=new CalendarView(this);calendar.setDate(date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());body.addView(calendar);
-        LinearLayout details=new LinearLayout(this);details.setOrientation(LinearLayout.VERTICAL);body.addView(details);renderDate(details);
-        calendar.setOnDateChangeListener((v,y,m,d)->{date=LocalDate.of(y,m+1,d);renderDate(details);});
+    private void pickWorkDate(){
+        DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->{date=LocalDate.of(y,m+1,d);render();chooseShift();},date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());picker.setTitle("Choose work day");picker.show();
     }
-    private void renderDate(LinearLayout details) {
-        LinearLayout previous=body;body=details;body.removeAllViews();
-        text(date.format(DateTimeFormatter.ofPattern("EEE, d MMM")),18);
-        List<ShiftRepository.Run> runs=repository.runsForDate(date);
-        if(runs.isEmpty())action("Choose shift",this::chooseShift);
-        else {
-            for(ShiftRepository.Run run:runs) {
-                action(summary(run)+"  ·  Change",()->shiftMenu(run));
-                if(working(run))action("Add task",()->{taskRun=run.id;repeat=0;moreOptions=false;screen=2;render();});
-            }
-        }
-        body=previous;
+    private void openEditor(boolean work,long run){
+        remember();if(draft.isEmpty() || workEditor!=work)editorDate=work?date:LocalDate.now();if(run>0){ShiftRepository.Run chosen=repository.findRun(run);if(chosen!=null)editorDate=dateOf(chosen.startsAt);}if(workEditor!=work || (taskRun>0)!=(run>0))repeat=0;workEditor=work;taskRun=run;editorGroup=work?TaskGroups.newTaskGroup(this):"";screen=EDITOR;render();
     }
+    private void morePage(){
+        heading("More","Extra tools, whenever you need them");
+        section("ORGANIZE");tool("Task library & search","Find tasks across every group",()->startActivity(new Intent(this,MainActivity.class).putExtra("search_all",true)));
+        tool("Completed tasks","Your finished task history",()->{screen=HISTORY;render();});tool("Task bundles","Reuse a set of tasks",()->TaskBundles.show(this,this::render));
+        section("WORK SETUP");tool("Saved shift templates","Optional templates and task rules",()->startActivity(new Intent(this,LegacyShiftActivity.class)));
+        section("SETTINGS");tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
+        tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
+        text("PinTask 2.1",12);
+    }
+    private void quickSettings(){new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();render();if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},42);}).setNegativeButton("Cancel",null).show();}
+    private void historyPage(){heading("Completed tasks","Your task history");link("‹ Back to More",()->navigate(MORE));try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> done=store.completedAll();if(done.isEmpty())empty("Nothing completed yet","Finished tasks will appear here.");for(TaskStore.Task task:done)body.addView(TaskCards.done(this,task,this::render));}}
     private void chooseShift() {
         String[] codes={"TD","ND","U8","EZ","Off"};
         new AlertDialog.Builder(this).setTitle("Shift for "+date.format(DateTimeFormatter.ofPattern("d MMM")))
@@ -156,42 +113,44 @@ public final class ShiftActivity extends Activity {
     }
     private boolean working(ShiftRepository.Run run) {return run.templateId!=0 || (!run.label.equals("Off")&&!run.label.equals("EZ"));}
     private void shiftMenu(ShiftRepository.Run run) {
-        new AlertDialog.Builder(this).setTitle(summary(run)).setItems(new String[]{"Choose another shift","View tasks","End / clear shift"},(d,index)->{
+        new AlertDialog.Builder(this).setTitle(summary(run)).setItems(new String[]{"Choose another shift","Work task list","End / clear shift"},(d,index)->{
             if(index==0){chooseShift();return;}
-            if(index==1){body.removeAllViews();header();text(summary(run),20);showTasks(repository.runTasks(run.id));action("Back to Schedule",this::render);return;}
+            if(index==1){subpage=0;render();return;}
             new AlertDialog.Builder(this).setTitle("End "+run.label+"?").setMessage("Unfinished tasks and reminders will be canceled. Completed history stays saved.")
                 .setNegativeButton("Keep",null).setPositiveButton("End shift",(a,b)->{for(long id:repository.endShift(run.id)){ReminderScheduler.cancel(this,id);TaskNotifications.cancel(this,id);}render();}).show();
         }).setNegativeButton("Close",null).show();
     }
     private void addTask() {
-        text("Add Task",22);
+        heading(workEditor?"New work task":"New task",workEditor?"For your job, patient or shift":"For your everyday to-do list");
+        link("‹ Back to "+(workEditor?"Work":"Tasks"),()->{remember();screen=workEditor?1:0;render();});
         ShiftRepository.Run run=repository.findRun(taskRun);
         if(run==null) taskRun=0;
-        text(run==null?"Personal task":summary(run),17);
+        if(workEditor)text(run==null?(editorGroup.isEmpty()?"Work":editorGroup):summary(run),15);
         LinearLayout main=body;
         LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(LinearLayout.VERTICAL);
         body=advanced;
-        action("Change day / shift",()->{
+        action(workEditor?"Change date or shift":"Change date",()->{
             remember();
             new DatePickerDialog(this,(v,y,m,d)->{
-                date=LocalDate.of(y,m+1,d);
+                editorDate=LocalDate.of(y,m+1,d);
+                if(!workEditor){render();return;}
                 List<ShiftRepository.Run> choices=new ArrayList<>();
-                for(ShiftRepository.Run r:repository.runsForDate(date)) if((r.templateId!=0 || (!r.label.equals("Off")&&!r.label.equals("EZ")))) choices.add(r);
-                String[] items=new String[choices.size()+1]; items[0]="Personal task";
+                for(ShiftRepository.Run r:repository.runsForDate(editorDate)) if((r.templateId!=0 || (!r.label.equals("Off")&&!r.label.equals("EZ")))) choices.add(r);
+                String[] items=new String[choices.size()+1]; items[0]="Job / patient task (no shift)";
                 for(int i=0;i<choices.size();i++) items[i+1]=summary(choices.get(i));
                 new AlertDialog.Builder(this).setTitle("Add task for "+date).setItems(items,(dialog,index)->{taskRun=index==0?0:choices.get(index-1).id;repeat=0;render();}).show();
-            },date.getYear(),date.getMonthValue()-1,date.getDayOfMonth()).show();
+            },editorDate.getYear(),editorDate.getMonthValue()-1,editorDate.getDayOfMonth()).show();
         });
         body=main;
         name=new EditText(this); name.setSingleLine(true); name.setTextColor(FG); name.setHintTextColor(Color.LTGRAY);
-        name.setHint("Task name"); name.setText(draft); name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)}); body.addView(name);
+        name.setHint("Task name"); name.setText(draft);name.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);name.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){saveTask();return true;}return false;}); name.setPadding(dp(14),dp(12),dp(14),dp(12));name.setBackground(shape(SURFACE,12));name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)}); body.addView(name);
         action(minute<0?"Time · Optional":("Time · "+String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60)),()->{
             remember(); int initial=minute<0?LocalTime.now().getHour()*60:minute;
             new TimePickerDialog(this,(v,h,m)->{minute=h*60+m;render();},initial/60,initial%60,true).show();
         });
-        action(moreOptions?"Less options":"More options",()->{remember();moreOptions=!moreOptions;render();});
+        link(moreOptions?"Less options":"More options",()->{remember();moreOptions=!moreOptions;render();});
         main.addView(advanced);advanced.setVisibility(moreOptions?View.VISIBLE:View.GONE);body=advanced;
-        if(run==null) text("Date: "+date,14);
+        if(run==null) text("Date: "+editorDate,14);
         else if(run.label.equals("ND"))text("Times after midnight use the next morning.",14);
         if(minute>=0) action("Remove time",()->{remember();minute=-1;reminder=0;repeat=0;render();});
         text("Reminder · Optional",15);
@@ -203,7 +162,7 @@ public final class ShiftActivity extends Activity {
             action("Custom repeat…",()->{remember();RepeatRules.custom(this,repeat,code->{repeat=code;render();});});
         } else repeats=spinner(new String[]{"Never","Every 30 minutes","Every hour","Every 2 hours","Every 3 hours","Every 4 hours"},repeat);
         body=main;
-        action("Save task",()->saveTask());
+        primary("Save task",this::saveTask);
     }
     private void saveTask() {
         remember();
@@ -212,12 +171,14 @@ public final class ShiftActivity extends Activity {
             if(minute<0 && (reminder>0 || repeat>0)) throw new IllegalArgumentException("Choose a time for reminders or repeats");
             if(taskRun>0) repository.addTask(taskRun,draft,minute,INTERVALS[repeat],EARLY[reminder]);
             else {
-                long due=minute<0?0:date.atTime(minute/60,minute%60).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+                long due=minute<0?0:editorDate.atTime(minute/60,minute%60).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
                 if(due>0 && due<=System.currentTimeMillis()) throw new IllegalArgumentException("Choose a future time");
-                try(TaskStore store=new TaskStore(this)) { store.add(draft,1,due,repeat,EARLY[reminder]); }
+                try(TaskStore store=new TaskStore(this)) { android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();try{TaskStore.Task created=store.add(draft,1,due,repeat,EARLY[reminder]);store.setGroup(created.id,workEditor?(editorGroup.isEmpty()?"Work":editorGroup):"");db.setTransactionSuccessful();}finally{db.endTransaction();} }
             }
+            if(workEditor && taskRun==0 && editorGroup.isEmpty() && "".equals(TaskGroups.selected(this)))TaskGroups.select(this,"Work");
             boolean wantsReminder=reminder>0;
-            draft=""; minute=-1; reminder=0; repeat=0; moreOptions=false; screen=0; render();
+            hideKeyboard();
+            draft=""; minute=-1; reminder=0; repeat=0; moreOptions=false; screen=workEditor?1:0; render();
             TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
             if(wantsReminder && !TaskNotifications.canNotify(this)) {
                 if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
@@ -230,19 +191,20 @@ public final class ShiftActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results) {
         super.onRequestPermissionsResult(request,permissions,results);
         TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
-        if(!TaskNotifications.canNotify(this)) toast("Task saved. Enable notifications in Android settings for reminders.");
+        if(!TaskNotifications.canNotify(this))toast(request==42?"Enable notifications in Android settings for Quick Add.":"Enable notifications in Android settings for reminders.");
     }
     private void showTasks(List<TaskStore.Task> tasks) {
-        tasks=TaskGroups.filter(this,tasks);
         for(TaskStore.Task task:tasks) {
             if(task.done)continue;
-            LinearLayout row=new LinearLayout(this);row.setGravity(android.view.Gravity.CENTER_VERTICAL);row.setPadding(0,dp(6),0,dp(6));
-            CheckBox done=new CheckBox(this);done.setContentDescription("Complete "+task.title);done.setEnabled(!task.paused);row.addView(done);
+            LinearLayout row=card();row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(android.view.Gravity.CENTER_VERTICAL);row.setPadding(dp(8),dp(8),dp(4),dp(8));
+            CheckBox done=new CheckBox(this);done.setContentDescription("Complete "+task.title);done.setMinWidth(dp(48));done.setMinHeight(dp(48));done.setEnabled(!task.paused);row.addView(done);
             LinearLayout detail=new LinearLayout(this);detail.setOrientation(LinearLayout.VERTICAL);
             TextView title=new TextView(this);title.setText(task.title);title.setTextColor(FG);title.setTextSize(17);detail.addView(title);title.setOnClickListener(v->TaskDetails.open(this,task,this::render));
-            String meta=(task.dueAt==0?"":java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(new Date(task.dueAt))+" · ")+(task.group.isEmpty()?"":task.group+" · ")+TaskDetails.summary(task);
+            ShiftRepository.Run linked=task.shiftRunId>0?repository.findRun(task.shiftRunId):null;
+            String shiftInfo=linked==null?"":linked.label+" · "+dateOf(linked.startsAt).format(DateTimeFormatter.ofPattern("d MMM"))+" · ";
+            String meta=shiftInfo+(task.dueAt==0?"":dueLabel(task.dueAt)+" · ")+(task.group.isEmpty()?"":task.group+" · ")+TaskDetails.summary(task);
             if(!meta.isEmpty()){TextView time=new TextView(this);time.setText(meta.replaceAll(" · $",""));time.setTextColor(Color.LTGRAY);time.setTextSize(12);detail.addView(time);}
-            row.addView(detail,new LinearLayout.LayoutParams(0,-2,1));row.addView(TaskCards.overflow(this,task,this::render));body.addView(row);
+            row.addView(detail,new LinearLayout.LayoutParams(0,-2,1));row.addView(TaskCards.overflow(this,task,this::render));
             done.setOnCheckedChangeListener((v,checked)->{if(!checked)return;boolean completed;
                 try(TaskStore store=new TaskStore(this)){TaskStore.Completion result=store.complete(task.id);completed=result!=null;if(completed){ReminderScheduler.cancel(this,task.id);TaskNotifications.cancel(this,task.id);}}
                 TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);render();if(completed)undoBar.offer(task.id,this::render);
@@ -255,9 +217,21 @@ public final class ShiftActivity extends Activity {
         return (run.group.isEmpty()?"":run.group+" · ")+run.label+" · "+Instant.ofEpochMilli(run.startsAt).atZone(ZoneId.systemDefault()).format(format)+" – "+Instant.ofEpochMilli(run.endsAt).atZone(ZoneId.systemDefault()).format(format)+(dateOf(run.startsAt).equals(dateOf(run.endsAt))?"":" (+1 day)");
     }
     private LocalDate dateOf(long value) { return Instant.ofEpochMilli(value).atZone(ZoneId.systemDefault()).toLocalDate(); }
-    private void text(String value,int size) { TextView v=new TextView(this);v.setText(value);v.setTextColor(FG);v.setTextSize(size);v.setPadding(4,12,4,8);body.addView(v); }
-    private void action(String label,Runnable action) { Button v=new Button(this);v.setText(label);v.setAllCaps(false);body.addView(v);v.setOnClickListener(w->action.run()); }
-    private Spinner spinner(String[] labels,int index) { Spinner v=new Spinner(this);ArrayAdapter<String> a=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,labels);a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);v.setAdapter(a);v.setSelection(Math.min(index,labels.length-1));body.addView(v);return v; }
-    private int dp(int value) { return Math.round(value*getResources().getDisplayMetrics().density); }
-    private void toast(String message) { Toast.makeText(this,message,Toast.LENGTH_LONG).show(); }
+    private String dueLabel(long due){java.time.ZonedDateTime time=Instant.ofEpochMilli(due).atZone(ZoneId.systemDefault());String clock=time.format(DateTimeFormatter.ofPattern("HH:mm"));LocalDate today=LocalDate.now();if(time.toLocalDate().equals(today))return clock;if(time.toLocalDate().equals(today.plusDays(1)))return "Tomorrow · "+clock;return time.format(DateTimeFormatter.ofPattern("EEE, d MMM · HH:mm"));}
+    private void heading(String title,String subtitle){TextView brand=text("P I N T A S K",11);brand.setTextColor(ACCENT);brand.setLetterSpacing(.12f);TextView heading=text(title,32);heading.setTypeface(Typeface.DEFAULT,Typeface.BOLD);text(subtitle,14);}
+    private void section(String label){TextView title=text(label,12);title.setTextColor(MUTED);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);title.setPadding(dp(2),dp(24),dp(2),dp(10));}
+    private LinearLayout card(){LinearLayout view=new LinearLayout(this);view.setOrientation(LinearLayout.VERTICAL);view.setPadding(dp(14),dp(12),dp(14),dp(12));view.setBackground(shape(SURFACE,16));LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.topMargin=dp(10);body.addView(view,params);return view;}
+    private void empty(String title,String subtitle){LinearLayout previous=body;body=card();text(title,18);text(subtitle,14);body=previous;}
+    private void tool(String title,String subtitle,Runnable action){LinearLayout box=card();TextView name=new TextView(this);name.setText(title+"  ›");name.setTextColor(FG);name.setTextSize(17);name.setTypeface(Typeface.DEFAULT,Typeface.BOLD);box.addView(name);TextView description=new TextView(this);description.setText(subtitle);description.setTextColor(MUTED);description.setTextSize(13);description.setPadding(0,dp(6),0,0);box.addView(description);box.setFocusable(true);box.setContentDescription(title);box.setOnClickListener(v->action.run());}
+    private TextView text(String value,int size){TextView view=new TextView(this);view.setText(value);view.setTextColor(size<=14?MUTED:FG);view.setTextSize(size);view.setPadding(dp(2),dp(8),dp(2),dp(6));body.addView(view);return view;}
+    private GradientDrawable shape(int fill,int radius){GradientDrawable bg=new GradientDrawable();bg.setColor(fill);bg.setCornerRadius(dp(radius));bg.setStroke(dp(1),fill==Color.TRANSPARENT?Color.TRANSPARENT:BORDER);return bg;}
+    private Button button(String label,boolean primary){Button view=new Button(this);view.setText(label);view.setAllCaps(false);view.setTextSize(15);view.setTextColor(primary?BG:FG);view.setTypeface(Typeface.DEFAULT,Typeface.BOLD);view.setBackground(shape(primary?ACCENT:SURFACE,12));view.setPadding(dp(14),dp(8),dp(14),dp(8));return view;}
+    private void action(String label,Runnable action){addButton(label,action,false);}
+    private void primary(String label,Runnable action){addButton(label,action,true);}
+    private void addButton(String label,Runnable action,boolean primary){Button view=button(label,primary);LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,-2);params.topMargin=dp(12);params.bottomMargin=dp(4);view.setMinHeight(dp(50));body.addView(view,params);view.setOnClickListener(v->action.run());}
+    private void link(String label,Runnable action){TextView view=text(label,14);view.setTextColor(ACCENT);view.setMinHeight(dp(48));view.setGravity(Gravity.CENTER_VERTICAL);view.setFocusable(true);view.setOnClickListener(v->action.run());}
+    private Spinner spinner(String[] labels,int index){Spinner view=new Spinner(this);ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_item,labels);adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);view.setAdapter(adapter);view.setSelection(Math.min(index,labels.length-1));body.addView(view);return view;}
+    private void hideKeyboard(){android.view.inputmethod.InputMethodManager input=getSystemService(android.view.inputmethod.InputMethodManager.class);if(input!=null)input.hideSoftInputFromWindow(getWindow().getDecorView().getWindowToken(),0);}
+    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
+    private void toast(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();}
 }

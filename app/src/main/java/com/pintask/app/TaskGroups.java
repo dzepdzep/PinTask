@@ -30,9 +30,11 @@ final class TaskGroups {
         }
         return new ArrayList<>(names);
     }
-    static void choose(Activity activity,Runnable refresh) {
+    static void choose(Activity activity,Runnable refresh) { choose(activity,refresh,false); }
+    static void chooseWork(Activity activity,Runnable refresh) { choose(activity,refresh,true); }
+    private static void choose(Activity activity,Runnable refresh,boolean work) {
         List<String> groups=names(activity);List<String> labels=new ArrayList<>();
-        labels.add("All tasks");labels.add("Ungrouped");labels.addAll(groups);labels.add("+ New job / patient / group");
+        labels.add(work?"All work":"All tasks");labels.add(work?"Unassigned shifts":"Ungrouped");labels.addAll(groups);labels.add("+ New job / patient / group");
         new AlertDialog.Builder(activity).setTitle("Choose job, patient or group").setItems(labels.toArray(new String[0]),(d,index)->{
             if(index==labels.size()-1) { create(activity,group->{select(activity,group);refresh.run();});return; }
             select(activity,index==0?null:index==1?"":groups.get(index-2));refresh.run();

@@ -74,7 +74,7 @@ public class FlexibleRepeatTest {
     }
     @Test public void customRepeatFormSurvivesRotationAndSavesSelectedCode() {
         try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
-            View root=controller.get().getWindow().getDecorView();find(root,"Add Task").performClick();
+            View root=controller.get().getWindow().getDecorView();find(root,"Add with time or repeat").performClick();
             root=controller.get().getWindow().getDecorView();first(root,EditText.class).setText("Custom draft");
             find(root,"More options").performClick();root=controller.get().getWindow().getDecorView();
             find(root,"Custom repeat…").performClick();AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();

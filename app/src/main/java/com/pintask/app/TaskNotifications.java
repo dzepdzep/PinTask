@@ -53,11 +53,9 @@ public final class TaskNotifications {
         return manager != null && manager.areNotificationsEnabled();
     }
 
-    private static PendingIntent open(Context context) {
-        Intent intent = new Intent(context, ShiftActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        return PendingIntent.getActivity(context, 2, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    private static PendingIntent open(Context context) {return open(context,0);}
+    private static PendingIntent open(Context context,long id) {
+        return PendingIntent.getActivity(context,2,TaskSections.openIntent(context,id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
 
     private static Notification.Action doneAction(Context context, long id) {
@@ -108,7 +106,7 @@ public final class TaskNotifications {
                 .setContentText(detail)
                 .setSubText("PinTask · Tap Done to clear")
                 .setCategory(Notification.CATEGORY_REMINDER)
-                .setContentIntent(open(context))
+                .setContentIntent(open(context,task.id))
                 .setDeleteIntent(dismissed)
                 .setAutoCancel(false)
                 .setOngoing(true)
@@ -128,7 +126,7 @@ public final class TaskNotifications {
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle("Due now: " + task.title)
                 .setContentText("Your scheduled PinTask reminder")
-                .setContentIntent(open(context))
+                .setContentIntent(open(context,task.id))
                 .setCategory(Notification.CATEGORY_REMINDER)
                 .setAutoCancel(true)
                 .addAction(doneAction(context, task.id)).addAction(snoozeAction(context, task.id)).build();
@@ -143,7 +141,7 @@ public final class TaskNotifications {
         PendingIntent undo=PendingIntent.getBroadcast(context,(int)id,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification notification=new Notification.Builder(context,CHANNEL).setSmallIcon(R.drawable.ic_check)
                 .setContentTitle("Task completed").setContentText("Undo is available for 10 seconds")
-                .setTimeoutAfter(10_000).setContentIntent(open(context))
+                .setTimeoutAfter(10_000).setContentIntent(open(context,id))
                 .addAction(new Notification.Action.Builder(Icon.createWithResource(context,R.drawable.ic_pin),"Undo",undo).build()).build();
         context.getSystemService(NotificationManager.class).notify("undo",(int)id,notification);
     }
