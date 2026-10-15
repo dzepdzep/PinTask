@@ -15,7 +15,7 @@ import java.util.*;
 
 /** Three destinations: everyday Tasks, Work, and advanced More. */
 public final class ShiftActivity extends Activity {
-    private static final int TASKS=0, WORK=1, MORE=2, EDITOR=3, HISTORY=4;
+    private static final int TASKS=0, WORK=1, MORE=2, EDITOR=3, HISTORY=4, PLAN=5;
     private static final int BG=Color.rgb(12,18,30),SURFACE=Color.rgb(24,34,51),BORDER=Color.rgb(43,57,76);
     private static final int FG=Color.rgb(238,244,251),MUTED=Color.rgb(156,173,194),ACCENT=Color.rgb(166,233,205);
     private static final int[] EARLY={-2,0,5,10,15,30,60},INTERVALS={0,30,60,120,180,240};
@@ -27,13 +27,16 @@ public final class ShiftActivity extends Activity {
     private long taskRun=0,detailRun=0;
     private String draft="",quickDraft="",editorGroup="";
     private int minute=-1,reminder=0,repeat=0;
-    private boolean moreOptions,workEditor;
+    private boolean moreOptions,workEditor,copyingDay;
+    private String planCode="TD1";
+    private final List<LocalDate> planDates=new ArrayList<>();
     private EditText name,quickEntry;
     private Spinner reminders,repeats;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);
         if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);reminder=state.getInt("reminder");repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
+        if(state!=null){copyingDay=state.getBoolean("copyingDay");planCode=state.getString("planCode","TD1");ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
         if(state==null)routeIntent(getIntent());render();
     }
     @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}}
@@ -46,8 +49,8 @@ public final class ShiftActivity extends Activity {
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);remember();setIntent(intent);routeIntent(intent);render();}
     private void remember(){if(quickEntry!=null)quickDraft=quickEntry.getText().toString();if(name!=null){draft=name.getText().toString();reminder=reminders.getSelectedItemPosition();repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition();}}
-    @Override protected void onSaveInstanceState(Bundle state){remember();state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("reminder",reminder);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);super.onSaveInstanceState(state);}
-    @Override public void onBackPressed(){remember();if(screen==EDITOR)screen=workEditor?WORK:TASKS;else if(screen==HISTORY)screen=MORE;else if(screen==WORK && detailRun!=0)detailRun=0;else if(screen!=TASKS)screen=TASKS;else{super.onBackPressed();return;}render();}
+    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putString("planCode",planCode);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("reminder",reminder);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);super.onSaveInstanceState(state);}
+    @Override public void onBackPressed(){remember();if(screen==EDITOR)screen=workEditor?WORK:TASKS;else if(screen==HISTORY)screen=MORE;else if(screen==PLAN)screen=WORK;else if(screen==WORK && detailRun!=0)detailRun=0;else if(screen!=TASKS)screen=TASKS;else{super.onBackPressed();return;}render();}
     private void navigate(int page){remember();screen=page;subpage=0;detailRun=0;render();}
     private void render(){
         name=null;quickEntry=null;
@@ -56,10 +59,10 @@ public final class ShiftActivity extends Activity {
         setContentView(root);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setClipToPadding(false);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(20),dp(24),dp(20),dp(24));scroll.addView(body);
-        if(screen==TASKS)tasksPage();else if(screen==WORK)workPage();else if(screen==MORE)morePage();else if(screen==HISTORY)historyPage();else addTask();
+        if(screen==TASKS)tasksPage();else if(screen==WORK)workPage();else if(screen==MORE)morePage();else if(screen==HISTORY)historyPage();else if(screen==PLAN)planPage();else addTask();
         undoBar=new UndoBar(this);root.addView(undoBar);
         LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(12),dp(8),dp(12),dp(10));nav.setBackgroundColor(Color.rgb(16,24,38));root.addView(nav);
-        String[] labels={"Tasks","Work","More"};int selected=screen==EDITOR?(workEditor?WORK:TASKS):screen==HISTORY?MORE:screen;
+        String[] labels={"Tasks","Work","More"};int selected=screen==EDITOR?(workEditor?WORK:TASKS):screen==HISTORY?MORE:screen==PLAN?WORK:screen;
         for(int i=0;i<labels.length;i++){final int page=i;TextView tab=new TextView(this);tab.setText(labels[i]);tab.setGravity(Gravity.CENTER);tab.setTextSize(15);tab.setTypeface(Typeface.DEFAULT,selected==i?Typeface.BOLD:Typeface.NORMAL);tab.setTextColor(selected==i?ACCENT:MUTED);tab.setBackground(shape(selected==i?SURFACE:Color.TRANSPARENT,14));tab.setContentDescription(labels[i]+" page");tab.setFocusable(true);tab.setSelected(selected==i);nav.addView(tab,new LinearLayout.LayoutParams(0,dp(52),1));tab.setOnClickListener(v->navigate(page));}
     }
     private void tasksPage(){
@@ -84,10 +87,39 @@ public final class ShiftActivity extends Activity {
         LinearLayout shift=card();LinearLayout previous=body;body=shift;
         text(date.format(DateTimeFormatter.ofPattern("EEE, d MMM")),19);
         text("Choose a day, then open a shift below for its tasks.",13);
-        action("Set a shift",this::pickWorkDate);body=previous;
+        action("Set a shift",this::pickWorkDate);
+        link("Next shift",this::openNextShift);
+        link("Copy day / plan several days",this::planningMenu);body=previous;
         for(ShiftRepository.Run plan:plans)tool(summary(plan),plan.dayLabel?"No shift":"Open tasks · "+dateOf(plan.startsAt).format(DateTimeFormatter.ofPattern("d MMM")),()->{if(plan.dayLabel)shiftMenu(plan);else{detailRun=plan.id;render();}});
         primary("Add work task",()->{List<ShiftRepository.Run> choices=new ArrayList<>();for(ShiftRepository.Run r:plans)if(working(r) && r.endsAt>System.currentTimeMillis())choices.add(r);if(choices.size()<2){openEditor(true,choices.isEmpty()?0:choices.get(0).id);return;}String[] labels=new String[choices.size()+1];labels[0]="Job / patient task (no shift)";for(int i=0;i<choices.size();i++)labels[i+1]=summary(choices.get(i));new AlertDialog.Builder(this).setTitle("Which shift?").setItems(labels,(d,i)->openEditor(true,i==0?0:choices.get(i-1).id)).show();});
         try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.work(this,store.activeAll());if(tasks.isEmpty())empty("Work tasks live here","Choose a job or patient, or add a task to a shift.");else{section(tasks.size()+" work tasks");showTasks(tasks);}}
+    }
+    private void openNextShift() {
+        ShiftRepository.Run next=repository.nextRun();if(next==null){toast("No upcoming shift for this job/patient");return;}
+        remember();date=dateOf(next.startsAt);detailRun=next.id;screen=WORK;render();
+    }
+    private void planningMenu() {
+        new AlertDialog.Builder(this).setTitle("Plan work days").setItems(new String[]{"Copy this day to other dates","Assign a shift to several dates"},(d,i)->{remember();copyingDay=i==0;planDates.clear();planCode="TD1";screen=PLAN;render();}).setNegativeButton("Cancel",null).show();
+    }
+    private void planPage() {
+        heading(copyingDay?"Copy day":"Plan several days",copyingDay?"Copy shifts and tasks from "+date.format(DateTimeFormatter.ofPattern("EEE, d MMM")):"Choose a shift and the dates you work it");
+        link("‹ Back to Work",()->{screen=WORK;render();});
+        String group=copyingDay?TaskGroups.selected(this):TaskGroups.newTaskGroup(this);
+        text("Job / patient: "+(group==null?"All work":group.isEmpty()?"Unassigned":group),14);
+        if(copyingDay)text("Copies the current job/patient selection into empty days. Completed tasks and checklists start fresh. Tasks with times already past are skipped.",14);
+        else action("Shift: "+planCode,()->new AlertDialog.Builder(this).setTitle("Choose shift").setItems(new String[]{"TD1 · 08:00–20:00","ND · 20:00–08:00 next day","TD2 · 09:00–21:00","Off"},(d,i)->{planCode=new String[]{"TD1","ND","TD2","Off"}[i];render();}).show());
+        action("Add date",()->{if(planDates.size()>=31){toast("Choose up to 31 dates at once");return;}LocalDate initial=planDates.isEmpty()?LocalDate.now():planDates.get(planDates.size()-1).plusDays(1);DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->{LocalDate chosen=LocalDate.of(y,m+1,d);if(chosen.isBefore(LocalDate.now()) || (copyingDay && chosen.equals(date))){toast("Choose today or a future date different from the source day");return;}if(!planDates.contains(chosen))planDates.add(chosen);Collections.sort(planDates);render();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());picker.getDatePicker().setMinDate(LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli());picker.show();});
+        for(LocalDate chosen:planDates)link(chosen.format(DateTimeFormatter.ofPattern("EEE, d MMM yyyy"))+" · remove",()->{planDates.remove(chosen);render();});
+        if(planDates.isEmpty())text("Add one or more dates above (up to 31).",14);
+        primary((copyingDay?"Copy to ":"Apply to ")+planDates.size()+(planDates.size()==1?" day":" days"),()->applyPlan(false));
+    }
+    private void applyPlan(boolean overlap) {
+        try {
+            if(copyingDay)repository.copyDay(date,planDates,overlap);else repository.scheduleDates(planDates,planCode,overlap);
+            date=planDates.get(0);detailRun=0;screen=WORK;planDates.clear();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);TaskWidget.refreshAll(this);render();toast("Days saved");
+        } catch(IllegalArgumentException e) {
+            if(!overlap && e.getMessage().startsWith("This overlaps"))new AlertDialog.Builder(this).setTitle("Shifts overlap").setMessage("Some selected dates overlap existing shifts. Keep both? All selected dates will be applied together.").setNegativeButton("Cancel",null).setPositiveButton("Keep both",(d,i)->applyPlan(true)).show();else toast(e.getMessage());
+        }
     }
     private void pickWorkDate(){
         DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->{date=LocalDate.of(y,m+1,d);render();chooseShift();},date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());picker.setTitle("Choose work day");picker.show();
@@ -102,14 +134,14 @@ public final class ShiftActivity extends Activity {
         section("WORK SETUP");tool("Saved shift templates","Optional templates and task rules",()->startActivity(new Intent(this,LegacyShiftActivity.class)));
         section("SETTINGS");tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 2.2",12);
+        text("PinTask 2.3",12);
     }
     private void quickSettings(){new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();render();if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},42);}).setNegativeButton("Cancel",null).show();}
     private void historyPage(){heading("Completed tasks","Your task history");link("‹ Back to More",()->navigate(MORE));try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> done=store.completedAll();if(done.isEmpty())empty("Nothing completed yet","Finished tasks will appear here.");for(TaskStore.Task task:done)body.addView(TaskCards.done(this,task,this::render));}}
     private void chooseShift() {
-        String[] codes={"TD1","ND","TD2","U8","EZ","Off"};
+        String[] codes={"TD1","ND","TD2","Off"};
         new AlertDialog.Builder(this).setTitle("Add shift or day label · "+date.format(DateTimeFormatter.ofPattern("d MMM")))
-            .setItems(new String[]{"TD1 · 08:00–20:00","ND · 20:00–08:00 next day","TD2 · 09:00–21:00","U8 · no shift","EZ · no shift","Off · no shift"},(d,index)->{
+            .setItems(new String[]{"TD1 · 08:00–20:00","ND · 20:00–08:00 next day","TD2 · 09:00–21:00","Off · no shift"},(d,index)->{
                 try{repository.schedule(date,codes[index]);render();}catch(IllegalArgumentException e){if(e.getMessage().startsWith("This overlaps"))new AlertDialog.Builder(this).setTitle("Shifts overlap").setMessage("These shifts have overlapping hours. Keep both on this date?").setNegativeButton("Cancel",null).setPositiveButton("Keep both",(a,b)->{repository.schedule(date,codes[index],true);render();}).show();else toast(e.getMessage());}
             }).setNegativeButton("Cancel",null).show();
     }
@@ -236,7 +268,7 @@ public final class ShiftActivity extends Activity {
         }
     }
     private String summary(ShiftRepository.Run run) {
-        if(run.dayLabel) return (run.group.isEmpty()?"":run.group+" · ")+run.label;
+        if(run.dayLabel) return (run.group.isEmpty()?"":run.group+" · ")+"Off";
         DateTimeFormatter format=DateTimeFormatter.ofPattern("HH:mm");
         return (run.group.isEmpty()?"":run.group+" · ")+run.label+" · "+Instant.ofEpochMilli(run.startsAt).atZone(ZoneId.systemDefault()).format(format)+" – "+Instant.ofEpochMilli(run.endsAt).atZone(ZoneId.systemDefault()).format(format)+(dateOf(run.startsAt).equals(dateOf(run.endsAt))?"":" (+1 day)");
     }

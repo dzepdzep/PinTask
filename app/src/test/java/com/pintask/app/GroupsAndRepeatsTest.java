@@ -67,7 +67,7 @@ public class GroupsAndRepeatsTest {
     }
     @Test public void groupedBackupRoundTripsAndOldBackupsDefaultToUngrouped() throws Exception {
         TaskGroups.select(context,"Home");TaskStore.Task task=store.add("Sheets",1,System.currentTimeMillis()+3600000,4,0);
-        shifts.schedule(LocalDate.now().plusDays(2),"U8");String backup=BackupData.export(store);
+        shifts.schedule(LocalDate.now().plusDays(2),"TD1");String backup=BackupData.export(store);
         BackupData.restore(store,backup);assertEquals("Home",store.find(task.id).group);assertEquals(4,store.find(task.id).recurrence);
         JSONObject old=new JSONObject(backup);
         for(String table:new String[]{"tasks","shift_runs"}) {JSONArray rows=old.getJSONArray(table);for(int i=0;i<rows.length();i++)rows.getJSONObject(i).remove("task_group");}

@@ -57,13 +57,13 @@ public class SimpleSchedulerTest {
         assertEquals(run.id,shifts.schedule(day,"TD1").id);
         assertEquals(12*3600000L,run.endsAt-run.startsAt);
     }
-    @Test public void offAndEzDoNotHideNightAndDoNotRequireHours() {
+    @Test public void offDoesNotHideNightAndDoesNotRequireHours() {
         LocalDate day=LocalDate.now().plusDays(2);
         ShiftRepository.Run night=shifts.schedule(day,"ND");
         ShiftRepository.Run off=shifts.schedule(day.plusDays(1),"Off");
         assertEquals("Off",off.label);
         assertThrows(IllegalArgumentException.class,()->shifts.addTask(off.id,"No shift",-1,0,-2));
-        assertEquals("EZ",shifts.schedule(day.plusDays(2),"EZ").label);
+        assertEquals("Off",shifts.schedule(day.plusDays(2),"Off").label);
         assertEquals(night.id,shifts.runsForDate(day).get(0).id);
     }
     @Test public void reminderOffSurvivesBackupAndCannotBeClaimedOrScheduled() throws Exception {

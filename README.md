@@ -1,8 +1,11 @@
-# PinTask 2.2 — simpler shifts and reusable task lists
+# PinTask 2.3 — faster work planning
 
 - **Tasks:** simple personal tasks. Date and time are immediately visible in Add with time or repeat; advanced options stay optional.
 - **Work:** choose a job/patient and date. TD1 is 08:00–20:00, TD2 is 09:00–21:00, ND is 20:00–08:00 the next morning. Older TD entries retain 08:00–20:00. Multiple shifts can share one date. Overlapping shifts ask before keeping both.
-- **U8, EZ and Off mean no working shift.** They have no shift hours or shift tasks. Existing U8 shift records from older versions stay intact to preserve tasks and history. End an existing working entry before marking its date as no shift.
+- **Only TD1, TD2, ND and Off are offered.** U8 and EZ have been removed from new scheduling. Old records remain readable so existing tasks are preserved; old no-shift markers display as Off.
+- **Next shift:** one tap from Work opens the earliest future working shift for the selected job/patient.
+- **Copy day / plan several days:** copy the selected day's shifts and tasks into other empty dates, or assign TD1/TD2/ND/Off to several dates at once. Add/remove dates in a review screen (up to 31); selected dates survive rotation. Copying keeps job/patient groups, wall-clock times and reminders, resets completion/checklist ticks, includes completed source tasks, and skips already-past timed occurrences. Existing destination work is never overwritten.
+- Batch operations are all-or-nothing. Conflicts leave all selected days unchanged. Overlaps require an explicit Keep both choice; existing overlaps within a copied day are retained.
 - Open a shift card for its own task list. Add tasks there, then use **Save as template at the bottom**. This snapshots each occurrence, including completed tasks, with its relative time, reminder, priority, notes and checklist. Reuse resets completion and checklist ticks. The original shift stays unchanged.
 - **Use saved template** adds tasks directly to an existing shift with matching hours. Repeated application adds another copy and asks first. Times already past are skipped; existing tasks are retained. Templates are always optional.
 - **More:** advanced library/search, history, bundles, templates, backup and Quick Add settings. Quick Add remains off unless enabled.
@@ -52,7 +55,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 2.2
+## Build and install 2.3
 
 Actions → Build installable Android APK → Run workflow. Download the **PinTask-installable-apk** artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 

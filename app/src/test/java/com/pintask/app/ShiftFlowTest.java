@@ -34,8 +34,9 @@ public class ShiftFlowTest {
         assertThrows(IllegalArgumentException.class,()->shifts.schedule(day,"ND"));assertEquals(1,shifts.runsForDate(day).size());shifts.schedule(day,"ND",true);assertEquals(2,shifts.runsForDate(day).size());
     }
     @Test public void noShiftLabelsCannotReceiveTasksOrEraseWorkingShifts(){
-        ShiftRepository.Run u8=shifts.schedule(day,"U8");assertTrue(u8.dayLabel);assertThrows(IllegalArgumentException.class,()->shifts.addTask(u8.id,"Invalid",-1,0,-2));assertThrows(IllegalArgumentException.class,()->shifts.saveRunAsTemplate(u8.id,"Invalid"));
-        ShiftRepository.Run ez=shifts.schedule(day,"EZ");assertTrue(ez.dayLabel);assertEquals(1,shifts.runsForDate(day).size());
+        assertThrows(IllegalArgumentException.class,()->shifts.schedule(day,"U8"));assertThrows(IllegalArgumentException.class,()->shifts.schedule(day,"EZ"));
+        ShiftRepository.Run u8=shifts.schedule(day,"Off");assertTrue(u8.dayLabel);assertThrows(IllegalArgumentException.class,()->shifts.addTask(u8.id,"Invalid",-1,0,-2));assertThrows(IllegalArgumentException.class,()->shifts.saveRunAsTemplate(u8.id,"Invalid"));
+        ShiftRepository.Run ez=shifts.schedule(day,"Off");assertTrue(ez.dayLabel);assertEquals(1,shifts.runsForDate(day).size());
         ShiftRepository.Run td=shifts.schedule(day,"TD1");assertFalse(td.dayLabel);assertEquals(1,shifts.runsForDate(day).size());assertThrows(IllegalArgumentException.class,()->shifts.schedule(day,"Off"));assertNotNull(shifts.findRun(td.id));
     }
     @Test public void templateSnapshotsAllOccurrencesDetailsAndSilentReminders() throws Exception {

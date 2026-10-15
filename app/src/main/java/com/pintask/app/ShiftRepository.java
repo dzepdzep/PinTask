@@ -192,6 +192,71 @@ public final class ShiftRepository implements AutoCloseable {
         }
     }
 
+    /** Soonest future working shift in the selected job/patient filter. */
+    public Run nextRun() {
+        try(Cursor c=store.getReadableDatabase().query("shift_runs",null,
+                "ended=0 AND day_label=0 AND started_at>?",new String[]{""+System.currentTimeMillis()},null,null,"started_at ASC, _id ASC")) {
+            while(c.moveToNext()){Run run=readRun(c);if(TaskGroups.matches(context,run.group))return run;}
+        }
+        return null;
+    }
+    private List<java.time.LocalDate> checkedDates(List<java.time.LocalDate> dates) {
+        if(dates==null || dates.isEmpty())throw new IllegalArgumentException("Choose at least one date");
+        java.util.TreeSet<java.time.LocalDate> unique=new java.util.TreeSet<>(dates);
+        if(unique.size()>31)throw new IllegalArgumentException("Choose up to 31 dates at once");
+        if(unique.first().isBefore(java.time.LocalDate.now()))throw new IllegalArgumentException("Choose today or a future date");
+        return new ArrayList<>(unique);
+    }
+    /** One transaction: a conflict on any date leaves every selected date unchanged. */
+    public List<Run> scheduleDates(List<java.time.LocalDate> dates,String label,boolean allowOverlap) {
+        List<java.time.LocalDate> selected=checkedDates(dates);SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
+        try {
+            List<Run> result=new ArrayList<>();for(java.time.LocalDate day:selected)result.add(schedule(day,label,allowOverlap));
+            db.setTransactionSuccessful();return result;
+        } finally {db.endTransaction();}
+    }
+    /** Copies all selected groups on the source date into empty destination days. */
+    public List<Run> copyDay(java.time.LocalDate source,List<java.time.LocalDate> dates,boolean allowOverlap) {
+        List<java.time.LocalDate> selected=checkedDates(dates);
+        if(selected.contains(source))throw new IllegalArgumentException("Choose dates different from the day being copied");
+        SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
+        try {
+            List<Run> originals=runsForDate(source);if(originals.isEmpty())throw new IllegalArgumentException("This day has no shifts to copy");
+            java.time.ZoneId zone=java.time.ZoneId.systemDefault();long now=System.currentTimeMillis();List<Run> result=new ArrayList<>();
+            for(java.time.LocalDate day:selected) {
+                List<Run> existing=runsForDate(day);
+                for(Run original:originals)for(Run run:existing)if(run.group.equals(original.group) && !run.dayLabel)
+                    throw new IllegalArgumentException("A selected day already has shifts for this job/patient. Choose empty days.");
+                ContentValues closed=new ContentValues();closed.put("ended",1);
+                for(Run original:originals)for(Run run:existing)if(run.group.equals(original.group) && run.dayLabel)db.update("shift_runs",closed,"_id=?",args(run.id));
+                for(Run original:originals) {
+                    java.time.LocalDateTime oldStart=java.time.Instant.ofEpochMilli(original.startsAt).atZone(zone).toLocalDateTime();
+                    java.time.LocalDateTime oldEnd=java.time.Instant.ofEpochMilli(original.endsAt).atZone(zone).toLocalDateTime();
+                    int duration=(int)java.time.Duration.between(oldStart,oldEnd).toMinutes();
+                    long start=day.atTime(oldStart.toLocalTime()).atZone(zone).toInstant().toEpochMilli(),end=ShiftTimes.atMinuteOffset(start,duration);
+                    if(end<=now)throw new IllegalArgumentException("Choose dates where the copied shifts have not ended");
+                    if(!original.dayLabel && !allowOverlap)try(Cursor c=db.rawQuery("SELECT _id,task_group FROM shift_runs WHERE ended=0 AND day_label=0 AND started_at<? AND ends_at>?",new String[]{""+end,""+start})) {
+                        while(c.moveToNext())if(original.group.equals(c.getString(1))){
+                            boolean copied=false;for(Run run:result)if(run.id==c.getLong(0))copied=true;
+                            // Preserve overlaps already present in the source; warn only about other existing days.
+                            if(!copied)throw new IllegalArgumentException("This overlaps another scheduled shift.");
+                        }
+                    }
+                    ContentValues values=new ContentValues();values.put("template_id",original.templateId);values.put("label",original.dayLabel?"Off":original.label);values.put("task_group",original.group);values.put("started_at",start);values.put("ends_at",end);values.put("day_label",original.dayLabel?1:0);
+                    long id=db.insertOrThrow("shift_runs",null,values);Run copy=findRun(id);result.add(copy);
+                    List<TaskStore.Task> tasks=runTasks(original.id);
+                    if(tasks.size()>120)throw new IllegalArgumentException("Maximum 120 tasks per copied shift");
+                    for(TaskStore.Task task:tasks) {
+                        long due=0;if(task.dueAt>0){int offset=(int)java.time.Duration.between(oldStart,java.time.Instant.ofEpochMilli(task.dueAt).atZone(zone).toLocalDateTime()).toMinutes();if(offset<0 || offset>=duration)throw new IllegalArgumentException("A source task falls outside its shift. Adjust its time first.");due=ShiftTimes.atMinuteOffset(start,offset);if(due<=now)continue;}
+                        long taskId=TaskStore.insert(db,task.title,due==0?Math.max(now,start):now,task.priority,due,0,task.notifyBeforeMinutes,id,copy.label);
+                        store.setGroup(taskId,copy.group);store.saveDetails(taskId,task.notes,TaskDetails.reset(task.checklist),false);
+                    }
+                }
+            }
+            db.setTransactionSuccessful();return result;
+        } finally {db.endTransaction();}
+    }
+
     public List<Run> runsForDate(java.time.LocalDate date) {
         java.time.ZoneId zone = java.time.ZoneId.systemDefault();
         long start = date.atStartOfDay(zone).toInstant().toEpochMilli();
@@ -222,7 +287,7 @@ public final class ShiftRepository implements AutoCloseable {
             case "TD": case "TD1": start=480; duration=720; break;
             case "TD2": start=540; duration=720; break;
             case "ND": start=1200; duration=720; break;
-            case "U8": case "EZ": case "Off": start=0; duration=1440; break;
+            case "Off": start=0; duration=1440; break;
             default: throw new IllegalArgumentException("Choose a shift");
         }
         long starts = date.atTime(start/60,start%60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
@@ -232,7 +297,7 @@ public final class ShiftRepository implements AutoCloseable {
         try {
             List<Run> existing = runsForDate(date);
             existing.removeIf(run->!run.group.equals(TaskGroups.newTaskGroup(context)));
-            boolean marker=label.equals("U8") || label.equals("EZ") || label.equals("Off");
+            boolean marker=label.equals("Off");
             for(Run run:existing) {
                 if((run.label.equals(label) || ((run.label.equals("TD") || run.label.equals("TD1")) && (label.equals("TD") || label.equals("TD1")))) && run.startsAt==starts && run.endsAt==ends && run.dayLabel==marker) {
                     db.setTransactionSuccessful();return run;
