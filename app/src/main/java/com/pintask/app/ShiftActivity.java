@@ -282,7 +282,20 @@ public final class ShiftActivity extends Activity {
         LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(LinearLayout.VERTICAL);
         body=main;
         name=new EditText(this); name.setSingleLine(true); name.setTextColor(FG); name.setHintTextColor(Color.LTGRAY);
-        name.setHint("Task name"); name.setText(draft);name.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);name.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){saveTask();return true;}return false;}); name.setPadding(dp(14),dp(12),dp(14),dp(12));name.setBackground(shape(SURFACE,12));name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)}); body.addView(name);
+        name.setHint("Task name"); name.setText(draft);
+        boolean guidedEntry=tour.active()&&tour.stage()==ShiftGuide.TYPING;
+        name.setImeOptions(guidedEntry?android.view.inputmethod.EditorInfo.IME_ACTION_NEXT:android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        name.setOnEditorActionListener((v,action,event)->{
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_NEXT&&tour.active()&&tour.stage()==ShiftGuide.TYPING){
+                nextGuidedTime();return true;
+            }
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){saveTask();return true;}
+            return false;
+        }); name.setPadding(dp(14),dp(12),dp(14),dp(12));name.setBackground(shape(SURFACE,12));name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)}); body.addView(name);
+        if(tour.active()&&tour.stage()==ShiftGuide.TYPING){
+            text("GUIDE · Type your task name, then tap Next to highlight its time.",14);
+            action("Next: Choose task time",this::nextGuidedTime);
+        }
         if(run==null)text("Date: "+editorDate,14);
         action(workEditor?"Change date or shift":"Change date",()->{
             remember();
@@ -298,7 +311,13 @@ public final class ShiftActivity extends Activity {
         });
         action(minute<0?"Time · Optional":("Time · "+String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60)),()->{
             remember(); int initial=minute<0?LocalTime.now().getHour()*60:minute;
-            new TimePickerDialog(this,(v,h,m)->{minute=h*60+m;render();},initial/60,initial%60,true).show();
+            TimePickerDialog picker=new TimePickerDialog(this,(v,h,m)->{
+                minute=h*60+m;
+                if(tour.active()&&tour.stage()==ShiftGuide.TIME_PICKER)tour.set(ShiftGuide.MORE);
+                render();
+            },initial/60,initial%60,true);
+            picker.setOnCancelListener(d->tour.cancelled(ShiftGuide.TIME_PICKER,ShiftGuide.TIME));
+            picker.show();
         });
         link(moreOptions?"Less options":"More options",()->{remember();moreOptions=!moreOptions;render();});
         main.addView(advanced);advanced.setVisibility(moreOptions?View.VISIBLE:View.GONE);body=advanced;
@@ -306,6 +325,17 @@ public final class ShiftActivity extends Activity {
         if(minute>=0) action("Remove time",()->{remember();minute=-1;reminder=0;repeat=0;render();});
         text("Reminder · Optional",15);
         reminders=spinner(new String[]{"No reminder","At task time","5 minutes before","10 minutes before","15 minutes before","30 minutes before","1 hour before"},reminder);
+        if(tour.active()){
+            reminders.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+                @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int index,long id){
+                    if(tour.active()&&tour.stage()==ShiftGuide.CHOOSING_REMINDER&&index>0){
+                        reminder=index;tour.set(ShiftGuide.SAVE);
+                        remember();render();
+                    }
+                }
+                @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+            });
+        }
         text("Repeat · Optional",15);
         if(taskRun==0) {
             repeats=new Spinner(this);RepeatRules.bind(this,repeats,repeat);body.addView(repeats);
@@ -314,6 +344,12 @@ public final class ShiftActivity extends Activity {
         } else repeats=spinner(new String[]{"Never","Every 30 minutes","Every hour","Every 2 hours","Every 3 hours","Every 4 hours"},repeat);
         body=main;
         primary("Save task",this::saveTask);
+    }
+    private void nextGuidedTime(){
+        if(name==null||name.getText().toString().trim().isEmpty()){
+            if(name!=null)name.setError("Enter a task name first");return;
+        }
+        remember();hideKeyboard();tour.set(ShiftGuide.TIME);render();
     }
     private void reminderTimingSettings() {
         AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle("Reminder timing")
@@ -344,7 +380,9 @@ public final class ShiftActivity extends Activity {
             if(workEditor && taskRun==0 && editorGroup.isEmpty() && "".equals(TaskGroups.selected(this)))TaskGroups.select(this,"Work");
             boolean wantsReminder=reminder>0;
             hideKeyboard();
-            draft=""; minute=-1; reminder=0; repeat=0; moreOptions=false;if(workEditor)detailRun=taskRun; screen=workEditor?1:0; render();
+            draft=""; minute=-1; reminder=0; repeat=0; moreOptions=false;
+            if(tour.active()&&tour.stage()==ShiftGuide.SAVING)tour.set(ShiftGuide.TEMPLATE);
+            if(workEditor)detailRun=taskRun; screen=workEditor?1:0; render();
             TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
             if(wantsReminder && !TaskNotifications.canNotify(this)) {
                 if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
@@ -352,7 +390,10 @@ public final class ShiftActivity extends Activity {
                 else toast("Enable PinTask notifications in Android settings for reminders");
             }
             toast("Task saved");
-        } catch(IllegalArgumentException e) { toast(e.getMessage()); }
+        } catch(IllegalArgumentException e) {
+            toast(e.getMessage());
+            tour.cancelled(ShiftGuide.SAVING,ShiftGuide.SAVE);
+        }
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results) {
         super.onRequestPermissionsResult(request,permissions,results);
