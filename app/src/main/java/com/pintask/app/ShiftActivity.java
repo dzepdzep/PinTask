@@ -113,7 +113,7 @@ public final class ShiftActivity extends Activity {
             if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},44);
             else toast("Enable PinTask notifications in Android settings to show new tasks.");
-        }else if(!TaskNotifications.canNotifyChannel(this,TaskNotifications.CHANNEL)){
+        }else if(quickDelayMinutes==0 && !TaskNotifications.canNotifyChannel(this,TaskNotifications.CHANNEL)){
             toast("Enable the Unfinished tasks notification category in Android settings.");
         }
         boolean delayed=quickDelayMinutes>0;
@@ -358,7 +358,7 @@ public final class ShiftActivity extends Activity {
         action("Or alert me: "+(editorDelayMinutes<0?"Choose a delay  ▾":RelativeDelay.label(editorDelayMinutes)+"  ▾"),
                 ()->RelativeDelay.choose(this,false,selected->{
                     remember();editorDelayMinutes=selected;minute=-1;
-                    if(reminder==0)reminder=1;render();
+                    reminder=1;render();
                 }));
         if(editorDelayMinutes>=0)text("The alarm counts from when you save this task."+
                 (taskRun>0?" It must be inside the selected shift.":""),13);
