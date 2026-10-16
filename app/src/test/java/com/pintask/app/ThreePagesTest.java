@@ -27,7 +27,25 @@ public class ThreePagesTest {
         TaskGroups.select(context,"Job B");
         try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
             View root=controller.get().getWindow().getDecorView();firstEntry(root).setText("Buy milk");controller.recreate();root=controller.get().getWindow().getDecorView();assertEquals("Buy milk",firstEntry(root).getText().toString());find(root,"Add").performClick();
-            assertEquals("",store.activeAll().get(0).group);assertEquals(0,store.activeAll().get(0).shiftRunId);assertEquals(-2,store.activeAll().get(0).notifyBeforeMinutes);assertEquals("Job B",TaskGroups.selected(context));assertNotNull(find(controller.get().getWindow().getDecorView(),"Buy milk"));
+            assertEquals("",store.activeAll().get(0).group);assertEquals(0,store.activeAll().get(0).shiftRunId);assertEquals(-1,store.activeAll().get(0).notifyBeforeMinutes);assertEquals("Job B",TaskGroups.selected(context));assertNotNull(find(controller.get().getWindow().getDecorView(),"Buy milk"));
+        }
+    }
+    @Test public void threeQuickTasksEachAppearImmediatelyAsIndependentNotifications() {
+        android.app.NotificationManager notifications=context.getSystemService(android.app.NotificationManager.class);
+        notifications.cancelAll();
+        try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
+            for(String taskName:new String[]{"Check equipment","Prepare supplies","Document care"}) {
+                View root=controller.get().getWindow().getDecorView();
+                firstEntry(root).setText(taskName);
+                find(root,"Add").performClick();
+            }
+            assertEquals(3,store.activeAll().size());
+            for(TaskStore.Task task:store.activeAll()) {
+                assertTrue(task.reminderEnabled());
+                assertEquals(-1,task.notifyBeforeMinutes);
+                assertNotNull("Missing notification for "+task.title,
+                        Shadows.shadowOf(notifications).getNotification((int)task.id));
+            }
         }
     }
     @Test public void workTaskWithoutShiftGetsAWorkGroupRatherThanLeakingOntoTasks() {
