@@ -61,7 +61,7 @@ public class CustomShiftSetupTest {
             find(root,"More").performClick();
             assertNotNull(find(controller.get().getWindow().getDecorView(),"Shift setup guide  ›"));
             find(controller.get().getWindow().getDecorView(),"Shift setup guide  ›").performClick();
-            assertNotNull(org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog());
+            assertTrue(context.getSharedPreferences("settings",0).getBoolean("custom_shifts_guide_seen_v28",false));
         }
     }
 
