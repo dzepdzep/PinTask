@@ -2,9 +2,7 @@ package com.pintask.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -60,6 +58,7 @@ final class StopwatchDelayPicker {
     static void show(Activity activity,int selectedSeconds,IntConsumer saveSeconds) {
         int initial=selectedSeconds>0?Math.min(selectedSeconds,MAX_SECONDS):15*60;
         int[] h={initial/3600},m={(initial%3600)/60},s={initial%60};
+        NumberPicker[] pickers=new NumberPicker[3];
 
         LinearLayout content=new LinearLayout(activity);
         content.setPadding(dp(activity,14),dp(activity,12),dp(activity,14),dp(activity,4));
@@ -81,6 +80,7 @@ final class StopwatchDelayPicker {
             NumberPicker picker=wheel(activity,i==0?720:59,
                     new String[]{"Delay hours","Delay minutes","Delay seconds"}[i]);
             picker.setValue(i==0?h[0]:i==1?m[0]:s[0]);
+            pickers[i]=picker;
             cell.addView(picker,new LinearLayout.LayoutParams(-1,dp(activity,145)));
             cell.setTag("delay_wheel_"+column);
             wheels.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
@@ -113,10 +113,12 @@ final class StopwatchDelayPicker {
                 .setView(content)
                 .setNegativeButton("Cancel",null)
                 .setPositiveButton("Set delay",null).create();
-        dialog.getWindow(); // Clock-style wheels never summon the typing keyboard.
+        android.view.inputmethod.InputMethodManager keyboard=
+                activity.getSystemService(android.view.inputmethod.InputMethodManager.class);
+        if(keyboard!=null)keyboard.hideSoftInputFromWindow(activity.getWindow().getDecorView().getWindowToken(),0);
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             try{
-                int duration=toSeconds(h[0],m[0],s[0]);
+                int duration=toSeconds(pickers[0].getValue(),pickers[1].getValue(),pickers[2].getValue());
                 dialog.dismiss();
                 saveSeconds.accept(duration);
             }catch(IllegalArgumentException wrong){
@@ -124,5 +126,7 @@ final class StopwatchDelayPicker {
             }
         }));
         dialog.show();
+        if(dialog.getWindow()!=null)dialog.getWindow().setSoftInputMode(
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     }
 }
