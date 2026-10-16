@@ -142,10 +142,10 @@ final class StartupAccess {
                 awaitingRuntime=true;
                 activity.requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},REQUEST_NOTIFICATIONS);
                 break;
-            case APP_NOTIFICATIONS: openAppNotifications();break;
-            case ALARM_CHANNEL: openChannel(TaskNotifications.REMINDER_CHANNEL);break;
-            case TASK_CHANNEL: openChannel(TaskNotifications.CHANNEL);break;
-            case EXACT_ALARMS: openExactAlarms();break;
+            case APP_NOTIFICATIONS:
+            case ALARM_CHANNEL:
+            case TASK_CHANNEL:
+            case EXACT_ALARMS: launch(settingsForIssue(activity,missing));break;
             default: finishStartup();
         }
     }
@@ -170,24 +170,26 @@ final class StartupAccess {
         }
     }
 
-    private void openAppNotifications() {
-        Intent i=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-        i.putExtra(Settings.EXTRA_APP_PACKAGE,activity.getPackageName());
-        launch(i);
-    }
-
-    private void openChannel(String id) {
-        Intent i=new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
-        i.putExtra(Settings.EXTRA_APP_PACKAGE,activity.getPackageName());
-        i.putExtra(Settings.EXTRA_CHANNEL_ID,id);
-        launch(i);
-    }
-
-    private void openExactAlarms() {
-        if(Build.VERSION.SDK_INT>=31)
-            launch(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                    Uri.parse("package:"+activity.getPackageName())));
-        else finishStartup();
+    /** Pure, independently verifiable mapping to official Android Settings actions. */
+    static Intent settingsForIssue(Context context,int issue) {
+        Intent out;
+        switch(issue) {
+            case APP_NOTIFICATIONS:
+                out=new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                out.putExtra(Settings.EXTRA_APP_PACKAGE,context.getPackageName());
+                return out;
+            case ALARM_CHANNEL:
+            case TASK_CHANNEL:
+                out=new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+                out.putExtra(Settings.EXTRA_APP_PACKAGE,context.getPackageName());
+                out.putExtra(Settings.EXTRA_CHANNEL_ID,issue==ALARM_CHANNEL?
+                        TaskNotifications.REMINDER_CHANNEL:TaskNotifications.CHANNEL);
+                return out;
+            case EXACT_ALARMS:
+                return new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        Uri.parse("package:"+context.getPackageName()));
+            default:throw new IllegalArgumentException("Not a system settings issue");
+        }
     }
 
     private void openBatterySettings() {
