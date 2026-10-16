@@ -28,7 +28,7 @@ public final class ShiftActivity extends Activity {
     private String draft="",quickDraft="",editorGroup="";
     private int minute=-1,reminder=0,repeat=0;
     private boolean moreOptions,workEditor,copyingDay;
-    private long planTemplateId=-1; // -1 = no shift (Off); otherwise saved custom type
+    private long planTemplateId=0; // 0 = not selected; -1 = Off; positive = saved custom type
     private final List<LocalDate> planDates=new ArrayList<>();
     private EditText name,quickEntry;
     private Spinner reminders,repeats;
@@ -36,7 +36,7 @@ public final class ShiftActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);
         if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);reminder=state.getInt("reminder");repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
-        if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",-1);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
+        if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",0);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
         if(state==null)routeIntent(getIntent());render();if(state==null)ShiftGuide.maybeWelcome(this,()->navigate(WORK));
     }
     @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}}
@@ -111,7 +111,7 @@ public final class ShiftActivity extends Activity {
         remember();date=dateOf(next.startsAt);detailRun=next.id;screen=WORK;render();
     }
     private void planningMenu() {
-        new AlertDialog.Builder(this).setTitle("Plan work days").setItems(new String[]{"Copy this day to other dates","Assign a shift to several dates"},(d,i)->{remember();copyingDay=i==0;planDates.clear();planTemplateId=-1;screen=PLAN;render();}).setNegativeButton("Cancel",null).show();
+        new AlertDialog.Builder(this).setTitle("Plan work days").setItems(new String[]{"Copy this day to other dates","Assign a shift to several dates"},(d,i)->{remember();copyingDay=i==0;planDates.clear();planTemplateId=0;screen=PLAN;render();}).setNegativeButton("Cancel",null).show();
     }
     private void planPage() {
         heading(copyingDay?"Copy day":"Plan several days",copyingDay?"Copy shifts and tasks from "+date.format(DateTimeFormatter.ofPattern("EEE, d MMM")):"Choose a shift and the dates you work it");
@@ -127,6 +127,7 @@ public final class ShiftActivity extends Activity {
     }
     private void applyPlan(boolean overlap) {
         try {
+            if(!copyingDay && planTemplateId==0)throw new IllegalArgumentException("Choose a shift first");
             if(copyingDay)repository.copyDay(date,planDates,overlap);
             else if(planTemplateId<0)repository.scheduleDates(planDates,"Off",overlap);
             else repository.scheduleCustomDates(planDates,planTemplateId,overlap);
@@ -160,6 +161,7 @@ public final class ShiftActivity extends Activity {
     private void quickSettings(){new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();render();if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},42);}).setNegativeButton("Cancel",null).show();}
     private void historyPage(){heading("Completed tasks","Your task history");link("‹ Back to More",()->navigate(MORE));try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> done=store.completedAll();if(done.isEmpty())empty("Nothing completed yet","Finished tasks will appear here.");for(TaskStore.Task task:done)body.addView(TaskCards.done(this,task,this::render));}}
     private String selectedCustomShiftLabel() {
+        if(planTemplateId==0)return "Choose custom shift";
         if(planTemplateId<0)return "Off · no shift";
         ShiftRepository.Template chosen=repository.findTemplate(planTemplateId);
         if(chosen==null)return "Choose custom shift";
