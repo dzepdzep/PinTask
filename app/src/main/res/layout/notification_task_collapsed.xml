@@ -19,8 +19,7 @@
         android:ellipsize="end"
         android:paddingEnd="8dp"
         android:textColor="?android:attr/textColorPrimary"
-        android:textSize="14sp"
-        android:contentDescription="Open task" />
+        android:textSize="14sp" />
 
     <TextView
         android:id="@+id/notification_done"
