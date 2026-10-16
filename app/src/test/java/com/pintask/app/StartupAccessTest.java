@@ -40,7 +40,7 @@ public class StartupAccessTest {
             Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(600));
             AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(dialog);
-            assertEquals("PinTask · Reminder access needed",dialog.getTitle());
+            assertEquals("Fix next",dialog.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString());
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Intent intent=Shadows.shadowOf((android.app.Application)app).getNextStartedActivity();
             assertNotNull(intent);
