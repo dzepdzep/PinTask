@@ -14,7 +14,7 @@ import static org.junit.Assert.*;
 @Config(sdk=28)
 public class SimplerHomeTest {
     Context context;
-    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).commit();}
+    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).putBoolean("interactive_shift_guide_v29",true).commit();}
     @Test public void oldEnabledSettingAndTaggedShortcutAreClearedWithoutRemovingTasks() {
         NotificationManager manager=context.getSystemService(NotificationManager.class);TaskNotifications.ensureChannel(context);
         context.getSharedPreferences("settings",0).edit().putBoolean("quick_add",true).commit();

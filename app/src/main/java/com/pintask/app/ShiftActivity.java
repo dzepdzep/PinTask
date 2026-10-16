@@ -32,15 +32,17 @@ public final class ShiftActivity extends Activity {
     private final List<LocalDate> planDates=new ArrayList<>();
     private EditText name,quickEntry;
     private Spinner reminders,repeats;
+    private ShiftGuide tour;
 
     @Override public void onCreate(Bundle state) {
-        super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);
+        super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);tour=new ShiftGuide(this);
         if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);reminder=state.getInt("reminder");repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
         if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",0);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
-        if(state==null)routeIntent(getIntent());render();if(state==null)ShiftGuide.maybeWelcome(this,()->navigate(WORK));
+        if(state!=null)tour.restore(state.getBoolean("interactiveTour",false),state.getInt("tourStage",0));
+        if(state==null)routeIntent(getIntent());render();if(state==null)ShiftGuide.maybeWelcome(this);
     }
     @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}}
-    @Override protected void onDestroy(){repository.close();super.onDestroy();}
+    @Override protected void onDestroy(){if(tour!=null)tour.stop();repository.close();super.onDestroy();}
     private void routeIntent(Intent intent){
         detailRun=0;
         long id=intent.getLongExtra("open_task",0);
@@ -49,8 +51,11 @@ public final class ShiftActivity extends Activity {
     }
     @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);remember();setIntent(intent);routeIntent(intent);render();}
     private void remember(){if(quickEntry!=null)quickDraft=quickEntry.getText().toString();if(name!=null){draft=name.getText().toString();reminder=reminders.getSelectedItemPosition();repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition();}}
-    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("reminder",reminder);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);super.onSaveInstanceState(state);}
-    @Override public void onBackPressed(){remember();if(screen==EDITOR)screen=workEditor?WORK:TASKS;else if(screen==HISTORY)screen=MORE;else if(screen==PLAN)screen=WORK;else if(screen==WORK && detailRun!=0)detailRun=0;else if(screen!=TASKS)screen=TASKS;else{super.onBackPressed();return;}render();}
+    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("reminder",reminder);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
+        state.putBoolean("interactiveTour",tour!=null&&tour.active());
+        state.putInt("tourStage",tour==null?0:tour.stage());
+        super.onSaveInstanceState(state);}
+    @Override public void onBackPressed(){if(tour!=null&&tour.active())tour.stop();remember();if(screen==EDITOR)screen=workEditor?WORK:TASKS;else if(screen==HISTORY)screen=MORE;else if(screen==PLAN)screen=WORK;else if(screen==WORK && detailRun!=0)detailRun=0;else if(screen!=TASKS)screen=TASKS;else{super.onBackPressed();return;}render();}
     private void navigate(int page){remember();screen=page;subpage=0;detailRun=0;render();}
     private void render(){
         name=null;quickEntry=null;
@@ -64,7 +69,14 @@ public final class ShiftActivity extends Activity {
         LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(12),dp(8),dp(12),dp(10));nav.setBackgroundColor(Color.rgb(16,24,38));root.addView(nav);
         String[] labels={"Tasks","Work","More"};int selected=screen==EDITOR?(workEditor?WORK:TASKS):screen==HISTORY?MORE:screen==PLAN?WORK:screen;
         for(int i=0;i<labels.length;i++){final int page=i;TextView tab=new TextView(this);tab.setText(labels[i]);tab.setGravity(Gravity.CENTER);tab.setTextSize(15);tab.setTypeface(Typeface.DEFAULT,selected==i?Typeface.BOLD:Typeface.NORMAL);tab.setTextColor(selected==i?ACCENT:MUTED);tab.setBackground(shape(selected==i?SURFACE:Color.TRANSPARENT,14));tab.setContentDescription(labels[i]+" page");tab.setFocusable(true);tab.setSelected(selected==i);nav.addView(tab,new LinearLayout.LayoutParams(0,dp(52),1));tab.setOnClickListener(v->navigate(page));}
+        if(tour!=null)tour.onRender(root);
     }
+
+    void tourStart(){tour.start();}
+    void tourOpenTasks(){navigate(TASKS);}
+    void tourRefresh(){render();}
+    EditText tourTitleField(){return name;}
+    Spinner tourReminderSelector(){return reminders;}
     private void tasksPage(){
         heading("Tasks","Your everyday to-do list");
         LinearLayout compose=card();LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);compose.addView(row);
@@ -99,7 +111,7 @@ public final class ShiftActivity extends Activity {
         text("Choose a day, then open a shift below for its tasks.",13);
         action("Set a shift",this::pickWorkDate);
         link("Create custom shift",()->createCustomShift(true));
-        link("How to set up shifts",()->ShiftGuide.replay(this,()->navigate(WORK)));
+        link("How to set up shifts",this::tourStart);
         link("Next shift",this::openNextShift);
         link("Copy day / plan several days",this::planningMenu);body=previous;
         for(ShiftRepository.Run plan:plans)tool(summary(plan),plan.dayLabel?"No shift":"Open tasks · "+dateOf(plan.startsAt).format(DateTimeFormatter.ofPattern("d MMM")),()->{if(plan.dayLabel)shiftMenu(plan);else{detailRun=plan.id;render();}});
@@ -137,7 +149,10 @@ public final class ShiftActivity extends Activity {
         }
     }
     private void pickWorkDate(){
-        DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->{date=LocalDate.of(y,m+1,d);render();chooseShift();},date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());picker.setTitle("Choose work day");picker.show();
+        DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->{date=LocalDate.of(y,m+1,d);render();chooseShift();},date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());
+        picker.setTitle(tour.active()&&tour.stage()==ShiftGuide.DATE?"GUIDE · Choose when your shift happens":"Choose work day");
+        picker.setOnCancelListener(d->tour.cancelled(ShiftGuide.DATE,ShiftGuide.SET_SHIFT));
+        picker.show();
     }
     private void openEditor(boolean work,long run){
         remember();if(draft.isEmpty() || workEditor!=work)editorDate=work?date:LocalDate.now();if(run>0){ShiftRepository.Run chosen=repository.findRun(run);if(chosen!=null)editorDate=dateOf(chosen.startsAt);}if(workEditor!=work || (taskRun>0)!=(run>0))repeat=0;workEditor=work;taskRun=run;editorGroup=work?TaskGroups.newTaskGroup(this):"";screen=EDITOR;render();
@@ -148,13 +163,13 @@ public final class ShiftActivity extends Activity {
         tool("Completed tasks","Your finished task history",()->{screen=HISTORY;render();});tool("Task bundles","Reuse a set of tasks",()->TaskBundles.show(this,this::render));
         section("WORK SETUP");
         tool("Create custom shift","Choose your own name and working hours",()->createCustomShift(false));
-        tool("Shift setup guide","Replay the step-by-step walkthrough",()->ShiftGuide.replay(this,()->navigate(WORK)));
+        tool("Interactive shift guide","Follow highlighted buttons through a real shift setup",this::tourStart);
         tool("Saved shift templates","Optional templates and task rules",()->startActivity(new Intent(this,LegacyShiftActivity.class)));
         section("SETTINGS");tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 2.8",12);
+        text("PinTask 2.9",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
@@ -170,10 +185,14 @@ public final class ShiftActivity extends Activity {
     private String clock(int minute){return String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60);}
 
     private void createCustomShift(boolean scheduleNow) {
+        boolean guided=tour!=null&&tour.active()&&tour.stage()==ShiftGuide.FORM;
         CustomShiftDialog.show(this,repository,template->{
-            if(scheduleNow)scheduleSelectedShift(template.id,false);
+            if(guided) {
+                tour.set(ShiftGuide.SET_SHIFT);
+                render();
+            } else if(scheduleNow)scheduleSelectedShift(template.id,false);
             else{render();toast("Custom shift saved. Choose it from Work → Set a shift.");}
-        });
+        },()->{if(guided)tour.cancelled(ShiftGuide.FORM,ShiftGuide.CREATE);},guided);
     }
 
     private void chooseCustomShift(boolean planning) {
@@ -185,7 +204,8 @@ public final class ShiftActivity extends Activity {
         }
         labels[types.size()]="＋ Create custom shift";
         labels[types.size()+1]="Off · no shift";
-        new AlertDialog.Builder(this).setTitle(planning?"Select custom shift":"Schedule a shift · "+date.format(DateTimeFormatter.ofPattern("d MMM")))
+        new AlertDialog.Builder(this).setTitle(tour.active()&&tour.stage()==ShiftGuide.DATE?
+                "GUIDE · Choose your saved custom shift":planning?"Select custom shift":"Schedule a shift · "+date.format(DateTimeFormatter.ofPattern("d MMM")))
             .setItems(labels,(d,index)->{
                 if(index==types.size()){
                     CustomShiftDialog.show(this,repository,template->{
@@ -197,13 +217,17 @@ public final class ShiftActivity extends Activity {
                     else scheduleSelectedShift(-1,false);
                 }else if(planning){planTemplateId=types.get(index).id;render();}
                 else scheduleSelectedShift(types.get(index).id,false);
-            }).setNegativeButton("Cancel",null).show();
+            }).setNegativeButton("Cancel",null)
+            .setOnCancelListener(d->tour.cancelled(ShiftGuide.DATE,ShiftGuide.SET_SHIFT))
+            .show();
     }
 
     private void scheduleSelectedShift(long templateId,boolean allowOverlap) {
         try {
             ShiftRepository.Run run=templateId<0?repository.schedule(date,"Off",allowOverlap):repository.scheduleCustom(date,templateId,allowOverlap);
-            if(templateId>=0){detailRun=run.id;screen=WORK;}
+            if(templateId>=0){detailRun=run.id;screen=WORK;
+                if(tour.active()&&tour.stage()==ShiftGuide.DATE)tour.set(ShiftGuide.ADD_TASK);
+            }
             TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);render();
         }catch(IllegalArgumentException e){
             if(!allowOverlap && e.getMessage().startsWith("This overlaps"))
@@ -241,7 +265,15 @@ public final class ShiftActivity extends Activity {
     private void saveTemplate(ShiftRepository.Run run) {
         EditText title=new EditText(this);title.setSingleLine(true);title.setText(getString(R.string.shift_template_name,run.label));
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Save as template").setMessage("Reuse this shift's tasks, times, reminders, notes and checklists. Completed tasks are included and reset when reused.").setView(title).setNegativeButton("Cancel",null).setPositiveButton("Save",null).create();
-        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{repository.saveRunAsTemplate(run.id,title.getText().toString());dialog.dismiss();toast("Template saved");}catch(IllegalArgumentException e){title.setError(e.getMessage());}}));dialog.show();
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{
+                repository.saveRunAsTemplate(run.id,title.getText().toString());
+                if(tour.active()&&tour.stage()==ShiftGuide.TEMPLATE_DIALOG)tour.done();
+                dialog.dismiss();toast("Template saved");
+            }catch(IllegalArgumentException e){title.setError(e.getMessage());}
+        }));
+        dialog.setOnDismissListener(d->tour.cancelled(ShiftGuide.TEMPLATE_DIALOG,ShiftGuide.TEMPLATE));
+        dialog.show();
     }
     private void useTemplate(ShiftRepository.Run run) {
         List<ShiftRepository.Template> templates=repository.templates();if(templates.isEmpty()){toast("Save a shift as a template first");return;}
@@ -258,7 +290,20 @@ public final class ShiftActivity extends Activity {
         LinearLayout advanced=new LinearLayout(this);advanced.setOrientation(LinearLayout.VERTICAL);
         body=main;
         name=new EditText(this); name.setSingleLine(true); name.setTextColor(FG); name.setHintTextColor(Color.LTGRAY);
-        name.setHint("Task name"); name.setText(draft);name.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);name.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){saveTask();return true;}return false;}); name.setPadding(dp(14),dp(12),dp(14),dp(12));name.setBackground(shape(SURFACE,12));name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)}); body.addView(name);
+        name.setHint("Task name"); name.setText(draft);
+        boolean guidedEntry=tour.active()&&tour.stage()==ShiftGuide.TYPING;
+        name.setImeOptions(guidedEntry?android.view.inputmethod.EditorInfo.IME_ACTION_NEXT:android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        name.setOnEditorActionListener((v,action,event)->{
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_NEXT&&tour.active()&&tour.stage()==ShiftGuide.TYPING){
+                nextGuidedTime();return true;
+            }
+            if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){saveTask();return true;}
+            return false;
+        }); name.setPadding(dp(14),dp(12),dp(14),dp(12));name.setBackground(shape(SURFACE,12));name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)}); body.addView(name);
+        if(tour.active()&&tour.stage()==ShiftGuide.TYPING){
+            text("GUIDE · Type your task name, then tap Next to highlight its time.",14);
+            action("Next: Choose task time",this::nextGuidedTime);
+        }
         if(run==null)text("Date: "+editorDate,14);
         action(workEditor?"Change date or shift":"Change date",()->{
             remember();
@@ -274,7 +319,13 @@ public final class ShiftActivity extends Activity {
         });
         action(minute<0?"Time · Optional":("Time · "+String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60)),()->{
             remember(); int initial=minute<0?LocalTime.now().getHour()*60:minute;
-            new TimePickerDialog(this,(v,h,m)->{minute=h*60+m;render();},initial/60,initial%60,true).show();
+            TimePickerDialog picker=new TimePickerDialog(this,(v,h,m)->{
+                minute=h*60+m;
+                if(tour.active()&&tour.stage()==ShiftGuide.TIME_PICKER)tour.set(ShiftGuide.MORE);
+                render();
+            },initial/60,initial%60,true);
+            picker.setOnCancelListener(d->tour.cancelled(ShiftGuide.TIME_PICKER,ShiftGuide.TIME));
+            picker.show();
         });
         link(moreOptions?"Less options":"More options",()->{remember();moreOptions=!moreOptions;render();});
         main.addView(advanced);advanced.setVisibility(moreOptions?View.VISIBLE:View.GONE);body=advanced;
@@ -282,6 +333,17 @@ public final class ShiftActivity extends Activity {
         if(minute>=0) action("Remove time",()->{remember();minute=-1;reminder=0;repeat=0;render();});
         text("Reminder · Optional",15);
         reminders=spinner(new String[]{"No reminder","At task time","5 minutes before","10 minutes before","15 minutes before","30 minutes before","1 hour before"},reminder);
+        if(tour.active()){
+            reminders.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+                @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int index,long id){
+                    if(tour.active()&&tour.stage()==ShiftGuide.CHOOSING_REMINDER&&index>0){
+                        reminder=index;tour.set(ShiftGuide.SAVE);
+                        remember();render();
+                    }
+                }
+                @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+            });
+        }
         text("Repeat · Optional",15);
         if(taskRun==0) {
             repeats=new Spinner(this);RepeatRules.bind(this,repeats,repeat);body.addView(repeats);
@@ -290,6 +352,12 @@ public final class ShiftActivity extends Activity {
         } else repeats=spinner(new String[]{"Never","Every 30 minutes","Every hour","Every 2 hours","Every 3 hours","Every 4 hours"},repeat);
         body=main;
         primary("Save task",this::saveTask);
+    }
+    private void nextGuidedTime(){
+        if(name==null||name.getText().toString().trim().isEmpty()){
+            if(name!=null)name.setError("Enter a task name first");return;
+        }
+        remember();hideKeyboard();tour.set(ShiftGuide.TIME);render();
     }
     private void reminderTimingSettings() {
         AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle("Reminder timing")
@@ -320,7 +388,9 @@ public final class ShiftActivity extends Activity {
             if(workEditor && taskRun==0 && editorGroup.isEmpty() && "".equals(TaskGroups.selected(this)))TaskGroups.select(this,"Work");
             boolean wantsReminder=reminder>0;
             hideKeyboard();
-            draft=""; minute=-1; reminder=0; repeat=0; moreOptions=false;if(workEditor)detailRun=taskRun; screen=workEditor?1:0; render();
+            draft=""; minute=-1; reminder=0; repeat=0; moreOptions=false;
+            if(tour.active()&&tour.stage()==ShiftGuide.SAVING)tour.set(ShiftGuide.TEMPLATE);
+            if(workEditor)detailRun=taskRun; screen=workEditor?1:0; render();
             TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
             if(wantsReminder && !TaskNotifications.canNotify(this)) {
                 if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
@@ -328,7 +398,10 @@ public final class ShiftActivity extends Activity {
                 else toast("Enable PinTask notifications in Android settings for reminders");
             }
             toast("Task saved");
-        } catch(IllegalArgumentException e) { toast(e.getMessage()); }
+        } catch(IllegalArgumentException e) {
+            toast(e.getMessage());
+            tour.cancelled(ShiftGuide.SAVING,ShiftGuide.SAVE);
+        }
     }
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results) {
         super.onRequestPermissionsResult(request,permissions,results);

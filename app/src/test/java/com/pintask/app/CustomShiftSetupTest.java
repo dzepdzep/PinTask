@@ -57,11 +57,14 @@ public class CustomShiftSetupTest {
             assertTrue(context.getSharedPreferences("settings",0).getBoolean("custom_shifts_guide_seen_v28",false));
             assertEquals(ShiftGuide.TITLES.length,ShiftGuide.DETAILS.length);
             assertTrue(ShiftGuide.DETAILS[3].contains("Add task to this shift"));
+            assertTrue(context.getSharedPreferences("settings",0).getBoolean("interactive_shift_guide_v29",false));
             View root=controller.get().getWindow().getDecorView();
             find(root,"More").performClick();
-            assertNotNull(find(controller.get().getWindow().getDecorView(),"Shift setup guide  ›"));
-            find(controller.get().getWindow().getDecorView(),"Shift setup guide  ›").performClick();
-            assertTrue(context.getSharedPreferences("settings",0).getBoolean("custom_shifts_guide_seen_v28",false));
+            assertNotNull(find(controller.get().getWindow().getDecorView(),"Interactive shift guide  ›"));
+            ((View)find(controller.get().getWindow().getDecorView(),"Interactive shift guide  ›").getParent()).performClick();
+            // Replaying opens the real Tasks screen with Work as the first spotlight.
+            assertNotNull(find(controller.get().getWindow().getDecorView(),"Add with time or repeat"));
+            assertFalse(context.getSharedPreferences("settings",0).getBoolean("guide_created_fake_shift",false));
         }
     }
 

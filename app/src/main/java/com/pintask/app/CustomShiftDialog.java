@@ -18,10 +18,22 @@ final class CustomShiftDialog {
     private static final DateTimeFormatter CLOCK=DateTimeFormatter.ofPattern("HH:mm");
 
     static void show(Activity activity,ShiftRepository repository,Consumer<ShiftRepository.Template> saved) {
+        show(activity,repository,saved,()->{},false);
+    }
+
+    static void show(Activity activity,ShiftRepository repository,Consumer<ShiftRepository.Template> saved,
+            Runnable onCancel,boolean guided) {
+        final boolean[] successful={false};
         LinearLayout form=new LinearLayout(activity);
         form.setOrientation(LinearLayout.VERTICAL);
         int margin=(int)(18*activity.getResources().getDisplayMetrics().density);
         form.setPadding(margin,margin,margin,margin);
+        if(guided){
+            TextView header=new TextView(activity);
+            header.setText("GUIDE · Create your actual shift\\n1. Type a name\\n2. Set your hours\\n3. Tap Save shift");
+            header.setTextColor(Color.rgb(20,94,78));header.setTextSize(15);
+            header.setPadding(0,0,0,14);form.addView(header);
+        }
         EditText name=field(activity,form,"Shift name (e.g. Day / Evening)","My shift",50);
         EditText start=field(activity,form,"Starts at (24h HH:mm)","08:00",5);
         EditText end=field(activity,form,"Ends at (24h HH:mm)","20:00",5);
@@ -35,13 +47,14 @@ final class CustomShiftDialog {
             try {
                 int from=parse(start),to=parse(end);
                 ShiftRepository.Template template=repository.addTemplate(title,from,to);
-                dialog.dismiss();
+                successful[0]=true;dialog.dismiss();
                 saved.accept(template);
             }catch(IllegalArgumentException e){
                 start.setError("Enter valid 24-hour times, for example 08:00");
                 android.widget.Toast.makeText(activity,e.getMessage(),android.widget.Toast.LENGTH_LONG).show();
             }
         }));
+        dialog.setOnDismissListener(d->{if(!successful[0])onCancel.run();});
         dialog.show();
     }
 
