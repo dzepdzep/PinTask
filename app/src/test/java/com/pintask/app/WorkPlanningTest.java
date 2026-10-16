@@ -17,7 +17,7 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class) @Config(sdk=28)
 public class WorkPlanningTest {
     Context context;TaskStore store;ShiftRepository shifts;LocalDate day;
-    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().commit();store=new TaskStore(context);shifts=new ShiftRepository(context);day=LocalDate.now().plusDays(5);}
+    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).commit();store=new TaskStore(context);shifts=new ShiftRepository(context);day=LocalDate.now().plusDays(5);}
     @After public void close(){shifts.close();store.close();}
     @Test public void batchSchedulesUniqueDatesAndNeverDuplicatesExistingShift(){
         List<LocalDate> dates=Arrays.asList(day.plusDays(2),day,day);assertEquals(2,shifts.scheduleDates(dates,"TD1",false).size());shifts.scheduleDates(dates,"TD1",false);assertEquals(1,shifts.runsForDate(day).size());assertEquals(1,shifts.runsForDate(day.plusDays(2)).size());
