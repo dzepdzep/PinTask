@@ -165,11 +165,12 @@ public final class ShiftActivity extends Activity {
         tool("Create custom shift","Choose your own name and working hours",()->createCustomShift(false));
         tool("Interactive shift guide","Follow highlighted buttons through a real shift setup",this::tourStart);
         tool("Saved shift templates","Optional templates and task rules",()->startActivity(new Intent(this,LegacyShiftActivity.class)));
-        section("SETTINGS");tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
+        section("SETTINGS");tool("Reminder health check","Test the alarm sound, permissions and a 60-second scheduled alarm",()->ReminderHealth.show(this));
+        tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 2.9",12);
+        text("PinTask 3.0",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
@@ -320,6 +321,8 @@ public final class ShiftActivity extends Activity {
         action(minute<0?"Time · Optional":("Time · "+String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60)),()->{
             remember(); int initial=minute<0?LocalTime.now().getHour()*60:minute;
             TimePickerDialog picker=new TimePickerDialog(this,(v,h,m)->{
+                // A chosen time is an audible reminder by default, never silently "No reminder".
+                if(minute<0 && reminder==0)reminder=1;
                 minute=h*60+m;
                 if(tour.active()&&tour.stage()==ShiftGuide.TIME_PICKER)tour.set(ShiftGuide.MORE);
                 render();
@@ -327,6 +330,7 @@ public final class ShiftActivity extends Activity {
             picker.setOnCancelListener(d->tour.cancelled(ShiftGuide.TIME_PICKER,ShiftGuide.TIME));
             picker.show();
         });
+        if(minute>=0)text("Alarm: "+(reminder==0?"Off (tap More options to enable)":reminder==1?"At task time":new String[]{"","At task time","5 minutes early","10 minutes early","15 minutes early","30 minutes early","1 hour early"}[reminder]),14);
         link(moreOptions?"Less options":"More options",()->{remember();moreOptions=!moreOptions;render();});
         main.addView(advanced);advanced.setVisibility(moreOptions?View.VISIBLE:View.GONE);body=advanced;
         if(run!=null && !dateOf(run.startsAt).equals(dateOf(run.endsAt)))text("After-midnight times belong to the next morning of this shift.",14);
@@ -392,11 +396,7 @@ public final class ShiftActivity extends Activity {
             if(tour.active()&&tour.stage()==ShiftGuide.SAVING)tour.set(ShiftGuide.TEMPLATE);
             if(workEditor)detailRun=taskRun; screen=workEditor?1:0; render();
             TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
-            if(wantsReminder && !TaskNotifications.canNotify(this)) {
-                if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
-                    requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},41);
-                else toast("Enable PinTask notifications in Android settings for reminders");
-            }
+            if(wantsReminder)ReminderHealth.warnWhenBlocked(this);
             toast("Task saved");
         } catch(IllegalArgumentException e) {
             toast(e.getMessage());
