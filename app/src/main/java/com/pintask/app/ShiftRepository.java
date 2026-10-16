@@ -384,6 +384,36 @@ public final class ShiftRepository implements AutoCloseable {
         } finally { db.endTransaction(); }
     }
 
+    /**
+     * Schedule by relative duration while a real shift is active (not by typing HH:mm).
+     * Keep full millisecond precision from save; do not round to the wall clock minute.
+     */
+    public void addTaskAfter(long runId,String title,int delayMinutes,int every,int early) {
+        String name=title==null?"":title.trim();
+        if(name.isEmpty())throw new IllegalArgumentException("Enter a task name");
+        if(delayMinutes<1||delayMinutes>43200)throw new IllegalArgumentException("Choose 1 minute to 30 days");
+        if(every!=0 && every!=30 && every!=60 && every!=120 && every!=180 && every!=240)
+            throw new IllegalArgumentException("Unsupported repeat interval");
+        if(early!=-2 && early!=0 && early!=5 && early!=10 && early!=15 && early!=30 && early!=60)
+            throw new IllegalArgumentException("Unsupported reminder");
+        Run run=findRun(runId);
+        if(run==null||run.dayLabel||run.endsAt<=System.currentTimeMillis())
+            throw new IllegalArgumentException("Choose an active or upcoming shift");
+        long now=System.currentTimeMillis();
+        long due=now+delayMinutes*60_000L;
+        if(due<run.startsAt || due>=run.endsAt)
+            throw new IllegalArgumentException("This delay falls outside your selected shift. Choose a shorter delay or another shift.");
+        SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
+        try{
+            for(long time=due;time<run.endsAt;time+=every==0?Long.MAX_VALUE:every*60_000L){
+                long id=TaskStore.insert(db,name.substring(0,Math.min(160,name.length())),now,1,time,0,early,run.id,run.label);
+                store.setGroup(id,run.group);
+                if(every==0)break;
+            }
+            db.setTransactionSuccessful();
+        }finally{db.endTransaction();}
+    }
+
     private static Run readRun(Cursor c) {
         Run run=new Run(c.getLong(c.getColumnIndexOrThrow("_id")),
                 c.getLong(c.getColumnIndexOrThrow("template_id")),
