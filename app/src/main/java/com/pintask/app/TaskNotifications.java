@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Icon;
 import android.os.Build;
+import android.widget.RemoteViews;
 
 import java.text.DateFormat;
 import java.util.Date;
@@ -65,15 +66,29 @@ public final class TaskNotifications {
         return PendingIntent.getActivity(context,2,TaskSections.openIntent(context,id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
 
-    private static Notification.Action doneAction(Context context, long id) {
+    private static PendingIntent doneIntent(Context context, long id) {
         Intent intent = new Intent(context, TaskActionReceiver.class);
         intent.setAction(ACTION_DONE);
         intent.putExtra(EXTRA_ID, id);
-        PendingIntent callback = PendingIntent.getBroadcast(context, (int) id, intent,
+        return PendingIntent.getBroadcast(context, (int) id, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private static Notification.Action doneAction(Context context, long id) {
         return new Notification.Action.Builder(
-                Icon.createWithResource(context, R.drawable.ic_check), "Done", callback)
+                Icon.createWithResource(context, R.drawable.ic_check), "Done", doneIntent(context, id))
                 .extend(new Notification.Action.WearableExtender().setHintLaunchesActivity(false).setAvailableOffline(false)).build();
+    }
+
+    /** A tappable Done button in the collapsed notification, not just its expanded actions.
+     * DecoratedCustomViewStyle keeps Android's normal notification header and Wear OS metadata. */
+    private static RemoteViews compactTask(Context context, TaskStore.Task task, boolean dueNow) {
+        RemoteViews compact = new RemoteViews(context.getPackageName(), R.layout.notification_task_collapsed);
+        compact.setTextViewText(R.id.notification_task_title,
+                dueNow ? "Due now: " + task.title : task.title);
+        compact.setOnClickPendingIntent(R.id.notification_task_title, open(context, task.id));
+        compact.setOnClickPendingIntent(R.id.notification_done, doneIntent(context, task.id));
+        return compact;
     }
 
     public static boolean watchEnabled(Context context) {
@@ -135,6 +150,8 @@ public final class TaskNotifications {
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle(task.title)
                 .setContentText(detail)
+                .setCustomContentView(compactTask(context, task, false))
+                .setStyle(new Notification.DecoratedCustomViewStyle())
                 .setSubText("PinTask · Tap Done to clear")
                 .setCategory(Notification.CATEGORY_REMINDER)
                 .setContentIntent(open(context,task.id))
@@ -160,6 +177,8 @@ public final class TaskNotifications {
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle("Due now: " + task.title)
                 .setContentText("Your scheduled PinTask reminder")
+                .setCustomContentView(compactTask(context, task, true))
+                .setStyle(new Notification.DecoratedCustomViewStyle())
                 .setOnlyAlertOnce(true)
                 .setContentIntent(open(context,task.id))
                 .setCategory(Notification.CATEGORY_REMINDER)
