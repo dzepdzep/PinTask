@@ -29,13 +29,13 @@ final class ShiftGuide {
     static void maybeWelcome(Activity activity,Runnable openWork) {
         if(activity.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean(PREF,false))return;
         activity.getSharedPreferences("settings",Context.MODE_PRIVATE).edit().putBoolean(PREF,true).apply();
-        activity.getWindow().getDecorView().post(()->{
+        activity.getWindow().getDecorView().postDelayed(()->{
             if(activity.isFinishing() || activity.isDestroyed())return;
             new AlertDialog.Builder(activity).setTitle("Welcome to PinTask")
                     .setMessage("Want a quick guide to creating your own work shifts and timed tasks?")
                     .setNegativeButton("Later",null)
                     .setPositiveButton("Show me",(d,i)->show(activity,0,openWork)).show();
-        });
+        }, 550);
     }
 
     static void replay(Activity activity,Runnable openWork) {show(activity,0,openWork);}
