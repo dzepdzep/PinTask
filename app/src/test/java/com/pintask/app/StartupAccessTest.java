@@ -42,7 +42,7 @@ public class StartupAccessTest {
             assertNotNull(dialog);
             assertEquals("Fix next",dialog.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString());
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-            Intent intent=Shadows.shadowOf((android.app.Application)app).getNextStartedActivity();
+            Intent intent=Shadows.shadowOf(controller.get()).getNextStartedActivity();
             assertNotNull(intent);
             assertEquals(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS,intent.getAction());
             assertEquals(TaskNotifications.REMINDER_CHANNEL,
