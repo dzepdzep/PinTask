@@ -265,7 +265,15 @@ public final class ShiftActivity extends Activity {
     private void saveTemplate(ShiftRepository.Run run) {
         EditText title=new EditText(this);title.setSingleLine(true);title.setText(getString(R.string.shift_template_name,run.label));
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Save as template").setMessage("Reuse this shift's tasks, times, reminders, notes and checklists. Completed tasks are included and reset when reused.").setView(title).setNegativeButton("Cancel",null).setPositiveButton("Save",null).create();
-        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{try{repository.saveRunAsTemplate(run.id,title.getText().toString());dialog.dismiss();toast("Template saved");}catch(IllegalArgumentException e){title.setError(e.getMessage());}}));dialog.show();
+        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{
+                repository.saveRunAsTemplate(run.id,title.getText().toString());
+                if(tour.active()&&tour.stage()==ShiftGuide.TEMPLATE_DIALOG)tour.done();
+                dialog.dismiss();toast("Template saved");
+            }catch(IllegalArgumentException e){title.setError(e.getMessage());}
+        }));
+        dialog.setOnDismissListener(d->tour.cancelled(ShiftGuide.TEMPLATE_DIALOG,ShiftGuide.TEMPLATE));
+        dialog.show();
     }
     private void useTemplate(ShiftRepository.Run run) {
         List<ShiftRepository.Template> templates=repository.templates();if(templates.isEmpty()){toast("Save a shift as a template first");return;}
