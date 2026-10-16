@@ -101,11 +101,11 @@ public class RelativeDelayTest {
             CustomShiftDialog.show(controller.get(),repo,t->saved[0]=t);
             AlertDialog form=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(find(form.getWindow().getDecorView(),"08:00"));
-            find(form.getWindow().getDecorView(),"08:00").performClick();
+            findDescription(form.getWindow().getDecorView(),"Choose shift begins").performClick();
             TimePickerDialog start=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             start.updateTime(20,0);
             start.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-            find(form.getWindow().getDecorView(),"20:00").performClick();
+            findDescription(form.getWindow().getDecorView(),"Choose shift ends").performClick();
             TimePickerDialog end=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             end.updateTime(8,0);
             end.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
@@ -116,6 +116,14 @@ public class RelativeDelayTest {
         }
     }
 
+    private static View findDescription(View root,String description) {
+        if(description.contentEquals(root.getContentDescription()==null?"":root.getContentDescription()))return root;
+        if(root instanceof ViewGroup)for(int i=0;i<((ViewGroup)root).getChildCount();i++){
+            View child=findDescription(((ViewGroup)root).getChildAt(i),description);
+            if(child!=null)return child;
+        }
+        return null;
+    }
     private static TextView find(View root,String text) {
         if(root instanceof TextView && text.equals(((TextView)root).getText().toString()))
             return (TextView)root;
