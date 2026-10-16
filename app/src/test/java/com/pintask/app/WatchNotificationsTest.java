@@ -34,6 +34,8 @@ public class WatchNotificationsTest {
         assertEquals(R.layout.notification_task_collapsed,b.contentView.getLayoutId());
         assertEquals(2,a.actions.length);
         assertEquals("Done",a.actions[0].title.toString());
+        assertEquals("Snooze",a.actions[1].title.toString());
+        assertEquals(SnoozeActivity.class.getName(),Shadows.shadowOf(a.actions[1].actionIntent).getSavedIntent().getComponent().getClassName());
         assertEquals(first.id,Shadows.shadowOf(a.actions[0].actionIntent).getSavedIntent()
                 .getLongExtra(TaskNotifications.EXTRA_ID,0));
         send(a.actions[0].actionIntent);
