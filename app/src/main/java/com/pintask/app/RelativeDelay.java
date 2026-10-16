@@ -2,8 +2,6 @@ package com.pintask.app;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.text.InputType;
-import android.widget.EditText;
 import java.util.Locale;
 import java.util.function.IntConsumer;
 import java.util.regex.Matcher;
@@ -50,41 +48,29 @@ final class RelativeDelay {
         return (int)n;
     }
 
-    /** A re-openable dropdown-style list. No selection is committed until confirmed. */
-    static void choose(Activity activity,boolean allowNow,IntConsumer picked) {
+    /** Human readable label for delays accurate down to the second. */
+    static String labelSeconds(int seconds) {
+        if(seconds==0)return "Now";
+        if(seconds%60==0)return label(seconds/60);
+        int hours=seconds/3600, minutes=(seconds%3600)/60, remainder=seconds%60;
+        StringBuilder text=new StringBuilder("In ");
+        if(hours>0)text.append(hours).append("h ");
+        if(minutes>0)text.append(minutes).append("m ");
+        text.append(remainder).append("s");
+        return text.toString();
+    }
+
+    /** Presets remain one tap. Custom opens scrollable stopwatch-style wheels. */
+    static void choose(Activity activity,boolean allowNow,int currentlySelectedSeconds,
+            IntConsumer pickedSeconds) {
         int shift=allowNow?0:1;
         String[] labels=new String[OPTIONS.length-shift];
         System.arraycopy(OPTIONS,shift,labels,0,labels.length);
         new AlertDialog.Builder(activity).setTitle("When should this task alert?")
                 .setItems(labels,(d,index)->{
                     int original=index+shift;
-                    if(original<MINUTES.length) picked.accept(MINUTES[original]);
-                    else custom(activity,picked);
+                    if(original<MINUTES.length) pickedSeconds.accept(MINUTES[original]*60);
+                    else StopwatchDelayPicker.show(activity,currentlySelectedSeconds,pickedSeconds);
                 }).setNegativeButton("Cancel",null).show();
-    }
-
-    private static void custom(Activity activity,IntConsumer picked) {
-        EditText input=new EditText(activity);
-        input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        input.setHint("90 minutes, 2 hours, 1h 30m");
-        input.setText("90 minutes");
-        int padding=(int)(20*activity.getResources().getDisplayMetrics().density);
-        android.widget.FrameLayout container=new android.widget.FrameLayout(activity);
-        container.setPadding(padding,0,padding,0);
-        container.addView(input);
-        AlertDialog dialog=new AlertDialog.Builder(activity)
-                .setTitle("Custom delay")
-                .setMessage("How long from the moment you add the task? Type 90 minutes, 2 hours, 1h 30m, or just the number of minutes.")
-                .setView(container).setNegativeButton("Cancel",null)
-                .setPositiveButton("Use delay",null).create();
-        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-            try{
-                int minutes=parse(input.getText().toString());
-                dialog.dismiss();
-                picked.accept(minutes);
-            }catch(IllegalArgumentException invalid){input.setError(invalid.getMessage());}
-        }));
-        dialog.show();
     }
 }

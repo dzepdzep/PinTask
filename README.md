@@ -1,4 +1,12 @@
-# PinTask 3.2 — Relative-time quick add, shift delays and clock pickers
+# PinTask 3.3 — Stopwatch-style delay selector (HH:MM:SS)
+
+- **Custom delay uses a visual stopwatch instead of typing text:** Open Tasks → When → Custom delay, or choose a relative delay in the Tasks/Work editor. The custom dialog now displays three independently scrollable numeric wheels labeled **HOURS · MINUTES · SECONDS** with a live **HH:MM:SS** readout. No keyboard or free-text entry is required.
+- **Choose any duration from 1 second to 30 days**, with whole-second accuracy. Examples: 01:30:00 means 90 minutes, 02:00:00 means two hours, and 00:05:15 means 5 minutes and 15 seconds. An all-zero duration or a value over 30 days is rejected rather than silently scheduling an immediate task.
+- **Short presets are preserved:** Now, 5 minutes, 10 minutes, 15 minutes, 30 minutes, and 1 hour remain one-tap options. You can cancel the stopwatch without changing the current delay.
+- **Accurate alarm scheduling:** Relative times in Quick Add and shift tasks now retain full second precision from the actual Add/Save press to their persisted due timestamps and Android scheduled alarms. Existing reminder sounds, permissions, Snooze/Done, shift clock selectors, tasks and custom templates remain unchanged. Shift-task delays must still fall within their shift.
+- **No migration or data loss:** Saved tasks and schedules are preserved; the change only affects how newly chosen relative delays are entered. Automated tests cover wheel selection, second precision, preset compatibility, range checks and shift bounds. Physical-phone locked-screen testing is still needed for important alerts.
+
+## PinTask 3.2 — Relative-time quick add, shift delays and clock pickers
 
 - **Tasks home Quick Add now has a compact time dropdown:** **Now** (the unchanged default), **In 5 minutes**, **In 10 minutes**, **In 15 minutes**, **In 30 minutes**, **In 1 hour**, or **Custom delay…**. Pick a delay before entering a task or pressing Add. A delayed task stays in your list but its **audible, pinned reminder is scheduled for the selected interval from when you tap Add**, not displayed early. Quick Add resets to Now after adding, preventing accidental future delays on the next task.
 - **Flexible custom delay entry:** Type **90 minutes**, **60 minutes**, **2 hours**, **1h 30m**, **1.5 hours**, or a plain number of minutes (1 minute through 30 days). Delays are saved as exact millisecond-based due times, without rounding to HH:mm.
@@ -118,7 +126,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 3.2
+## Build and install 3.3
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 

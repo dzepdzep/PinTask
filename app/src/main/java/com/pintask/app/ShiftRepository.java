@@ -388,10 +388,16 @@ public final class ShiftRepository implements AutoCloseable {
      * Schedule by relative duration while a real shift is active (not by typing HH:mm).
      * Keep full millisecond precision from save; do not round to the wall clock minute.
      */
+    /** Compatibility with minute-based callers and previously stored tests. */
     public void addTaskAfter(long runId,String title,int delayMinutes,int every,int early) {
+        addTaskAfterSeconds(runId,title,delayMinutes*60,every,early);
+    }
+
+    /** Stopwatch-based delay with exact second-level due timestamp. */
+    public void addTaskAfterSeconds(long runId,String title,int delaySeconds,int every,int early) {
         String name=title==null?"":title.trim();
         if(name.isEmpty())throw new IllegalArgumentException("Enter a task name");
-        if(delayMinutes<1||delayMinutes>43200)throw new IllegalArgumentException("Choose 1 minute to 30 days");
+        if(delaySeconds<1||delaySeconds>30*24*60*60)throw new IllegalArgumentException("Choose 1 minute to 30 days");
         if(every!=0 && every!=30 && every!=60 && every!=120 && every!=180 && every!=240)
             throw new IllegalArgumentException("Unsupported repeat interval");
         if(early!=-2 && early!=0 && early!=5 && early!=10 && early!=15 && early!=30 && early!=60)
@@ -400,7 +406,7 @@ public final class ShiftRepository implements AutoCloseable {
         if(run==null||run.dayLabel||run.endsAt<=System.currentTimeMillis())
             throw new IllegalArgumentException("Choose an active or upcoming shift");
         long now=System.currentTimeMillis();
-        long due=now+delayMinutes*60_000L;
+        long due=now+delaySeconds*1000L;
         if(due<run.startsAt || due>=run.endsAt)
             throw new IllegalArgumentException("This delay falls outside your selected shift. Choose a shorter delay or another shift.");
         SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
