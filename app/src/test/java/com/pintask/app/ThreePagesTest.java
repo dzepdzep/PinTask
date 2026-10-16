@@ -13,7 +13,7 @@ import static org.junit.Assert.*;
 @Config(sdk=28)
 public class ThreePagesTest {
     Context context;TaskStore store;
-    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).commit();store=new TaskStore(context);}
+    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).putBoolean("interactive_shift_guide_v29",true).commit();store=new TaskStore(context);}
     @After public void close(){store.close();}
     @Test public void taskWorkAndAdvancedFeaturesHaveSeparateDestinations() {
         store.add("Personal groceries");TaskGroups.select(context,"Patient A");store.add("Patient notes");TaskGroups.select(context,null);
