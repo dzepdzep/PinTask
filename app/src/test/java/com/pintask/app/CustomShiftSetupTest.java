@@ -61,7 +61,7 @@ public class CustomShiftSetupTest {
             View root=controller.get().getWindow().getDecorView();
             find(root,"More").performClick();
             assertNotNull(find(controller.get().getWindow().getDecorView(),"Interactive shift guide  ›"));
-            find(controller.get().getWindow().getDecorView(),"Interactive shift guide  ›").performClick();
+            ((View)find(controller.get().getWindow().getDecorView(),"Interactive shift guide  ›").getParent()).performClick();
             // Replaying opens the real Tasks screen with Work as the first spotlight.
             assertNotNull(find(controller.get().getWindow().getDecorView(),"Add with time or repeat"));
             assertFalse(context.getSharedPreferences("settings",0).getBoolean("guide_created_fake_shift",false));
