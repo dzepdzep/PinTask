@@ -51,6 +51,73 @@ public class RelativeDelayTest {
         assertThrows(IllegalArgumentException.class,()->RelativeDelay.parse("100000 minutes"));
     }
 
+    @Test public void stopwatchHoursMinutesAndSecondsValidateFullRange(){
+        assertEquals(90*60+12,StopwatchDelayPicker.toSeconds(1,30,12));
+        assertEquals(720*3600,StopwatchDelayPicker.toSeconds(720,0,0));
+        assertEquals(1,StopwatchDelayPicker.toSeconds(0,0,1));
+        assertThrows(IllegalArgumentException.class,()->StopwatchDelayPicker.toSeconds(0,0,0));
+        assertThrows(IllegalArgumentException.class,()->StopwatchDelayPicker.toSeconds(720,1,0));
+        assertThrows(IllegalArgumentException.class,()->StopwatchDelayPicker.toSeconds(1,60,0));
+        assertEquals("In 1h 30m 12s",RelativeDelay.labelSeconds(5412));
+        assertEquals("In 10 minutes",RelativeDelay.labelSeconds(600));
+    }
+
+    @Test public void stopwatchPickerDoesNotUseKeyboardAndSchedulesExactSeconds() {
+        try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
+            View root=controller.get().getWindow().getDecorView();
+            find(root,"When: Now  ▾").performClick();
+            AlertDialog menu=ShadowAlertDialog.getLatestAlertDialog();
+            menu.getListView().performItemClick(null,6,6);
+            AlertDialog stopwatch=ShadowAlertDialog.getLatestAlertDialog();
+            assertNotNull(stopwatch);
+            NumberPicker hour=findWheel(stopwatch.getWindow().getDecorView(),"Delay hours");
+            NumberPicker minute=findWheel(stopwatch.getWindow().getDecorView(),"Delay minutes");
+            NumberPicker second=findWheel(stopwatch.getWindow().getDecorView(),"Delay seconds");
+            assertNotNull(hour);assertNotNull(minute);assertNotNull(second);
+            hour.setValue(1);
+            minute.setValue(30);
+            second.setValue(12);
+            stopwatch.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            root=controller.get().getWindow().getDecorView();
+            assertNotNull(find(root,"When: In 1h 30m 12s  ▾"));
+            firstTextField(root).setText("Stopwatch seconds test");
+            long before=System.currentTimeMillis();
+            find(root,"Add").performClick();
+            TaskStore.Task saved=store.activePersonal().get(0);
+            assertTrue(saved.dueAt>=before+5412_000L);
+            assertTrue(saved.dueAt<=System.currentTimeMillis()+5412_000L);
+            assertEquals(0,saved.notifyBeforeMinutes);
+            assertEquals(1,org.robolectric.Shadows.shadowOf(alarms).getScheduledAlarms().size());
+            assertNull(org.robolectric.Shadows.shadowOf(notifications).getNotification((int)saved.id));
+        }
+    }
+
+    @Test public void shiftStopwatchDelayPersistsSecondsAndBounds(){
+        java.time.LocalDate now=java.time.LocalDate.now();
+        int start=java.time.LocalTime.now().getHour()*60;
+        try(ShiftRepository shifts=new ShiftRepository(context)){
+            ShiftRepository.Template type=shifts.addTemplate("Short timer",start,(start+1439)%1440);
+            ShiftRepository.Run run=shifts.scheduleCustom(now,type.id,false);
+            long before=System.currentTimeMillis();
+            shifts.addTaskAfterSeconds(run.id,"Shift seconds",77,0,0);
+            TaskStore.Task saved=shifts.runTasks(run.id).get(0);
+            assertTrue(saved.dueAt>=before+77_000L);
+            assertTrue(saved.dueAt<=System.currentTimeMillis()+77_000L);
+            assertThrows(IllegalArgumentException.class,
+                    ()->shifts.addTaskAfterSeconds(run.id,"Too far",30*24*60*60,0,0));
+            assertEquals(1,shifts.runTasks(run.id).size());
+        }
+    }
+
+    private static NumberPicker findWheel(View view,String text){
+        if(view instanceof NumberPicker&&text.contentEquals(view.getContentDescription()))return (NumberPicker)view;
+        if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){
+            NumberPicker p=findWheel(((ViewGroup)view).getChildAt(i),text);
+            if(p!=null)return p;
+        }
+        return null;
+    }
+
     @Test public void quickAddInTenMinutesCreatesOneScheduledAlarmNotImmediateNotification(){
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
             View root=controller.get().getWindow().getDecorView();
