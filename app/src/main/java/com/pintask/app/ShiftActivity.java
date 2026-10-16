@@ -32,16 +32,19 @@ public final class ShiftActivity extends Activity {
     private final List<LocalDate> planDates=new ArrayList<>();
     private EditText name,quickEntry;
     private Spinner reminders,repeats;
+    private StartupAccess startupAccess;
     private ShiftGuide tour;
 
     @Override public void onCreate(Bundle state) {
-        super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);tour=new ShiftGuide(this);
+        super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);tour=new ShiftGuide(this);startupAccess=new StartupAccess(this);
         if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);reminder=state.getInt("reminder");repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
         if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",0);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
         if(state!=null)tour.restore(state.getBoolean("interactiveTour",false),state.getInt("tourStage",0));
-        if(state==null)routeIntent(getIntent());render();if(state==null)ShiftGuide.maybeWelcome(this);
+        if(state==null)routeIntent(getIntent());render();
+        if(state==null)startupAccess.begin(()->ShiftGuide.maybeWelcome(this));
     }
-    @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}}
+    @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}
+        if(startupAccess!=null)startupAccess.onResume();}
     @Override protected void onDestroy(){if(tour!=null)tour.stop();repository.close();super.onDestroy();}
     private void routeIntent(Intent intent){
         detailRun=0;
@@ -165,12 +168,16 @@ public final class ShiftActivity extends Activity {
         tool("Create custom shift","Choose your own name and working hours",()->createCustomShift(false));
         tool("Interactive shift guide","Follow highlighted buttons through a real shift setup",this::tourStart);
         tool("Saved shift templates","Optional templates and task rules",()->startActivity(new Intent(this,LegacyShiftActivity.class)));
-        section("SETTINGS");tool("Reminder health check","Test the alarm sound, permissions and a 60-second scheduled alarm",()->ReminderHealth.show(this));
+        section("SETTINGS");
+        tool("Permission checklist",StartupAccess.nextRequired(this)==StartupAccess.READY?
+                "Core reminders allowed · Review startup permissions and battery":"Action needed · Grant missing reminder access",
+                ()->startupAccess.review());
+        tool("Reminder health check","Test the alarm sound, permissions and a 60-second scheduled alarm",()->ReminderHealth.show(this));
         tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.0",12);
+        text("PinTask 3.1",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
@@ -406,6 +413,9 @@ public final class ShiftActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] results) {
         super.onRequestPermissionsResult(request,permissions,results);
         TaskNotifications.syncAll(this); ReminderScheduler.rescheduleAll(this);
+        if(startupAccess!=null&&request==StartupAccess.REQUEST_NOTIFICATIONS){
+            startupAccess.onPermissionResult(request);return;
+        }
         if(!TaskNotifications.canNotify(this))toast(request==42?"Enable notifications in Android settings for Quick Add.":"Enable notifications in Android settings for reminders.");
     }
     private void showTasks(List<TaskStore.Task> tasks) {

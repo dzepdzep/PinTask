@@ -30,7 +30,7 @@ public class TimedAlarmUiTest {
         context=RuntimeEnvironment.getApplication();
         context.deleteDatabase("pintask.db");
         context.getSharedPreferences("settings",0).edit().clear()
-                .putBoolean("interactive_shift_guide_v29",true).commit();
+                .putBoolean("interactive_shift_guide_v29",true).putBoolean("startup_access_reviewed_v31",true).commit();
     }
 
     @Test public void timedTaskDefaultsToAlarmAndActuallySchedulesAnAlarm() {

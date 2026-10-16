@@ -19,7 +19,7 @@ public class CustomShiftSetupTest {
     @Before public void setup(){
         context=RuntimeEnvironment.getApplication();
         context.deleteDatabase("pintask.db");
-        context.getSharedPreferences("settings",0).edit().clear().commit();
+        context.getSharedPreferences("settings",0).edit().clear().putBoolean("startup_access_reviewed_v31",true).commit();
         store=new TaskStore(context);repository=new ShiftRepository(context);
     }
     @After public void tearDown(){repository.close();store.close();}
