@@ -18,7 +18,7 @@ import static org.junit.Assert.*;
 @Config(sdk=28)
 public class AllQualityOfLifeTest {
     Context context;TaskStore store;
-    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).commit();store=new TaskStore(context);}
+    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).putBoolean("interactive_shift_guide_v29",true).commit();store=new TaskStore(context);}
     @After public void close(){store.close();}
     @Test public void notesAndChecksPersistAndNewRepeatResetsOnlyTicks() {
         TaskStore.Task task=store.add("Room",1,System.currentTimeMillis()+3600000,1,0);
