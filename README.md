@@ -1,4 +1,13 @@
-# PinTask 2.7 — One-tap Done in collapsed notifications
+# PinTask 2.8 — Custom shifts and first-time guide
+
+- **No hardcoded TD1/TD2/ND choices for new shifts:** Work → Set a shift offers your saved custom shift types, Create custom shift, and Off. Existing TD/ND shift data and previously saved tasks stay untouched and readable.
+- **Create custom shift:** Choose any name and 24-hour start/end times (e.g. 08:00–20:00 or an overnight 20:00–08:00). Scheduling a shift does not force you to add tasks first. Reuse saved custom shift types for other dates or plan several dates.
+- **First-time walkthrough:** A welcome guide offers seven simple steps, covering custom shifts, dates, shift tasks, clock times, reminders, repeats, reusable task templates and notifications. Skip it or replay anytime under More → Shift setup guide. Work also links to the guide.
+- **Snooze + Done side by side:** Compact task notifications now show both buttons, while expanded actions and watch behavior remain intact. Snooze opens 5/15/30-minute, tomorrow, or custom-time choices; Done finishes only its own task.
+- **Quality of life:** Work links directly to Create custom shift, newly scheduled shifts open directly to their task list, and overnight shifts describe next-morning task timing. Backup and signed automatic GitHub Releases remain supported.
+- **Device caveat:** Android/ColorOS may replace custom collapsed notifications. Expanded native Snooze/Done actions remain available. For time-sensitive patient care, use approved clinical reminders.
+
+## PinTask 2.7 — One-tap Done in collapsed notifications
 
 - Unfinished task cards now provide a **Done** button directly in the collapsed notification (including shift tasks and due-now alerts), using Android's decorated custom notification layout. No expand tap is required on Android builds that render custom compact notifications.
 - The existing expanded **Done** and **Snooze** actions, Wear OS Done action, task IDs, background completion and undo are preserved. Tapping the title still opens the task.
@@ -74,7 +83,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 2.7
+## Build and install 2.8
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
