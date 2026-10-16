@@ -18,7 +18,7 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class) @Config(sdk=28)
 public class ShiftFlowTest {
     Context context;TaskStore store;ShiftRepository shifts;LocalDate day;
-    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().commit();store=new TaskStore(context);shifts=new ShiftRepository(context);day=LocalDate.now().plusDays(5);}
+    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).commit();store=new TaskStore(context);shifts=new ShiftRepository(context);day=LocalDate.now().plusDays(5);}
     @After public void close(){shifts.close();store.close();}
     @Test public void dayAndNightCoexistWithIndependentTasksAndIdempotentScheduling(){
         ShiftRepository.Run td=shifts.schedule(day,"TD1");shifts.addTask(td.id,"Day rounds",600,0,15);
