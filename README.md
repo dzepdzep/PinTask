@@ -1,4 +1,13 @@
-# PinTask 3.0 — Audible scheduled alarms and reminder reliability
+# PinTask 3.1 — Automatic reminder-access checks on startup
+
+- **Permission check every launch:** When PinTask opens, it checks Android notification permission, app-wide notification setting, the **Timed task alarms** and **Unfinished tasks** channels, and exact-alarm permission. Previously reviewed launches with all essential access enabled proceed without interruption. If anything required is blocked, PinTask shows a clear status checklist rather than silently assuming reminders will work.
+- **Guided permission approval:** Choose **Fix next** to request the Android 13+ notification runtime permission or open the specific Android notification channel / Alarms & reminders settings. On return to PinTask (or after responding to the runtime permission dialog), the app **checks the actual granted status again** and offers the next missing step. The user may press **Later** and keep using PinTask, but blocked/delayed alarm risks remain visible.
+- **Battery and device checks:** The same checklist shows alarm volume, whether standard Android battery optimization is active, and a clear caveat that ColorOS/OEM background or auto-start restrictions must be checked manually. **Battery settings** opens Android's system allowlist screen as an optional user choice. The app cannot automatically disable optimization, DND or OEM restrictions.
+- **Review on demand:** **More → Permission checklist** re-runs all checks and settings links any time, even if all permissions were previously approved.
+- **Preserves existing features:** The interactive shift guide, saved shifts and tasks, alarm sounds, Snooze/Done, reminder rescheduling on permission changes, and your existing data remain untouched. No new special permissions are declared in the manifest.
+- **Verification:** Automated tests cover all core permissions allowed, a blocked timed-alert channel and its Android settings link, missing exact alarm access on Android 12, and denied runtime notification permission on Android 13. A real on-phone locked-screen reminder test is still needed.
+
+## PinTask 3.0 — Audible scheduled alarms and reminder reliability
 
 - **Timed tasks are no longer silent by default:** When you select a time in the three-tab Tasks/Work editor, PinTask automatically selects **At task time**, with that alarm status shown on the task editor. You can deliberately choose **No reminder** under More options. Untimed quick-added items continue to appear immediately as persistent, quiet tasks.
 - **Real alarm-like notification sound:** Timed reminders, scheduled work tasks, early alerts and snoozes now use a NEW high-importance Android channel **Timed task alarms** with the system default alarm ringtone, alarm audio usage and vibration. A new channel is essential because Android won't let an update rewrite an existing channel's sound. The sound plays once per alert, not continuously until Done. Exact timing still requires Android's Alarms & reminders permission, and sounds depend on phone volume, Do Not Disturb and system/OEM restrictions.
@@ -100,7 +109,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 3.0
+## Build and install 3.1
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
