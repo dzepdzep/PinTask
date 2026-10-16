@@ -5,11 +5,12 @@ on:
   push:
     branches: [ main, master ]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -52,3 +53,28 @@ jobs:
           name: PinTask-installable-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+      - name: Prepare release files
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          VERSION="$(sed -nE "s/^[[:space:]]*versionName[[:space:]]+\x27([^\x27]+)\x27.*/\1/p" app/build.gradle | head -1)"
+          test -n "$VERSION"
+          echo "RELEASE_VERSION=$VERSION" >> "$GITHUB_ENV"
+          cp app/build/outputs/apk/release/app-release.apk "PinTask-${VERSION}.apk"
+          sha256sum "PinTask-${VERSION}.apk" > SHA256SUMS
+      - name: Publish signed GitHub release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="v${RELEASE_VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::Release $TAG already exists. Bump versionName and versionCode for each new app release."
+            exit 0
+          fi
+          gh release create "$TAG" "PinTask-${RELEASE_VERSION}.apk" SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "PinTask ${RELEASE_VERSION}" \
+            --notes "Signed installable APK. Install over your existing PinTask; do not uninstall or local data will be erased. Automated tests and signature verification passed. Real-device notification behavior has not been verified." \
+            --generate-notes
