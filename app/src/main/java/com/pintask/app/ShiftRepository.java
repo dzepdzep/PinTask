@@ -308,13 +308,15 @@ public final class ShiftRepository implements AutoCloseable {
     public Run scheduleCustom(java.time.LocalDate date,long templateId,boolean allowOverlap) {
         Template template=findTemplate(templateId);
         if(template==null)throw new IllegalArgumentException("Choose a saved custom shift");
+        long start=date.atTime(template.startMinute/60,template.startMinute%60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        if(ShiftTimes.atMinuteOffset(start,template.durationMinutes)<=System.currentTimeMillis())
+            throw new IllegalArgumentException("Choose a shift that has not ended");
         return insertRun(date,template.name,template.startMinute,template.durationMinutes,template.id,allowOverlap);
     }
 
     private Run insertRun(java.time.LocalDate date,String label,int start,int duration,long templateId,boolean allowOverlap) {
         long starts=date.atTime(start/60,start%60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
         long ends=ShiftTimes.atMinuteOffset(starts,duration);
-        if(ends<=System.currentTimeMillis())throw new IllegalArgumentException("Choose a shift that has not ended");
         SQLiteDatabase db=store.getWritableDatabase();
         db.beginTransaction();
         try {
