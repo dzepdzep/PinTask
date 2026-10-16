@@ -43,11 +43,17 @@ public class SimplerHomeTest {
     @Test public void calendarShiftPickerCreatesPlanWithoutShowingTemplateEditorOrTaskForm() {
         try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
             find(controller.get().getWindow().getDecorView(),"Work").performClick();
+            try(ShiftRepository custom=new ShiftRepository(context)){custom.addTemplate("Early",420,900);}
             find(controller.get().getWindow().getDecorView(),"Set a shift").performClick();View root=controller.get().getWindow().getDecorView();assertNull(find(root,"Optional templates"));assertNull(find(root,"End / clear TD"));
             android.app.DatePickerDialog datePicker=(android.app.DatePickerDialog)org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();datePicker.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            dialog.getListView().performItemClick(dialog.getListView().getChildAt(1),1,1);
-            try(ShiftRepository shifts=new ShiftRepository(context)){assertEquals("ND",shifts.runsForDate(java.time.LocalDate.now()).get(0).label);assertTrue(shifts.templates().isEmpty());}
+            assertEquals("Early · 07:00–15:00",dialog.getListView().getAdapter().getItem(0));
+            assertEquals(3,dialog.getListView().getAdapter().getCount());
+            dialog.getListView().performItemClick(dialog.getListView().getChildAt(0),0,0);
+            try(ShiftRepository shifts=new ShiftRepository(context)){
+                assertEquals("Early",shifts.runsForDate(java.time.LocalDate.now()).get(0).label);
+                assertEquals(1,shifts.templates().size());
+            }
         }
     }
     @Test public void oldPinnedLauncherAlsoOpensTheSimpleHome() {
