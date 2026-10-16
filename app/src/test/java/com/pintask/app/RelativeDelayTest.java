@@ -99,6 +99,7 @@ public class RelativeDelayTest {
             ShiftRepository repo=new ShiftRepository(context)){
             final ShiftRepository.Template[] saved={null};
             CustomShiftDialog.show(controller.get(),repo,t->saved[0]=t);
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             AlertDialog form=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(find(form.getWindow().getDecorView(),"08:00"));
             findDescription(form.getWindow().getDecorView(),"Choose shift begins").performClick();
@@ -109,7 +110,11 @@ public class RelativeDelayTest {
             TimePickerDialog end=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             end.updateTime(8,0);
             end.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertEquals("20:00",findDescription(form.getWindow().getDecorView(),"Choose shift begins").getClass()==Button.class?
+                ((Button)findDescription(form.getWindow().getDecorView(),"Choose shift begins")).getText().toString():"");
+            assertEquals("08:00",((Button)findDescription(form.getWindow().getDecorView(),"Choose shift ends")).getText().toString());
             form.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             assertNotNull(saved[0]);
             assertEquals(1200,saved[0].startMinute);
             assertEquals(720,saved[0].durationMinutes);
