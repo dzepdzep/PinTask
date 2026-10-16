@@ -21,7 +21,7 @@ public class SimpleSchedulerTest {
     Context context; TaskStore store; ShiftRepository shifts;
     @Before public void setup() {
         context=RuntimeEnvironment.getApplication(); context.deleteDatabase("pintask.db");
-        context.getSharedPreferences("settings",0).edit().putBoolean("custom_shifts_guide_seen_v28",true).commit();
+        context.getSharedPreferences("settings",0).edit().putBoolean("custom_shifts_guide_seen_v28",true).putBoolean("interactive_shift_guide_v29",true).commit();
         store=new TaskStore(context); shifts=new ShiftRepository(context);
     }
     @After public void close() { shifts.close(); store.close(); }
