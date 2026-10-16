@@ -77,9 +77,14 @@ public class RelativeDelayTest {
             hour.setValue(1);
             minute.setValue(30);
             second.setValue(12);
+            assertEquals(1,hour.getValue());
+            assertEquals(30,minute.getValue());
+            assertEquals(12,second.getValue());
             stopwatch.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             root=controller.get().getWindow().getDecorView();
-            assertNotNull(find(root,"When: In 1h 30m 12s  ▾"));
+            assertNotNull("After selection: "+allLabels(root),
+                    find(root,"When: In 1h 30m 12s  ▾"));
             firstTextField(root).setText("Stopwatch seconds test");
             long before=System.currentTimeMillis();
             find(root,"Add").performClick();
@@ -107,6 +112,14 @@ public class RelativeDelayTest {
                     ()->shifts.addTaskAfterSeconds(run.id,"Too far",30*24*60*60,0,0));
             assertEquals(1,shifts.runTasks(run.id).size());
         }
+    }
+
+    private static String allLabels(View view){
+        StringBuilder labels=new StringBuilder();
+        if(view instanceof TextView)labels.append(((TextView)view).getText()).append(" | ");
+        if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++)
+            labels.append(allLabels(((ViewGroup)view).getChildAt(i)));
+        return labels.toString();
     }
 
     private static NumberPicker findWheel(View view,String text){
