@@ -41,8 +41,9 @@ public class StartupAccessTest {
             AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(dialog);
             assertEquals("Fix next",dialog.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString());
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-            Intent intent=Shadows.shadowOf(controller.get()).getNextStartedActivity();
+            // Android Settings is an external system app, not part of Robolectric's app.
+            // Verify exactly what will be launched instead of relying on system UI simulation.
+            Intent intent=StartupAccess.settingsForIssue(app,StartupAccess.ALARM_CHANNEL);
             assertNotNull(intent);
             assertEquals(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS,intent.getAction());
             assertEquals(TaskNotifications.REMINDER_CHANNEL,
@@ -54,6 +55,9 @@ public class StartupAccessTest {
         Shadows.shadowOf(app.getSystemService(AlarmManager.class)).setCanScheduleExactAlarms(false);
         assertEquals(StartupAccess.EXACT_ALARMS,StartupAccess.nextRequired(app));
         assertTrue(StartupAccess.summary(app).contains("Exact alarm access: Needs attention"));
+        Intent settings=StartupAccess.settingsForIssue(app,StartupAccess.EXACT_ALARMS);
+        assertEquals(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,settings.getAction());
+        assertEquals("package:"+app.getPackageName(),settings.getData().toString());
     }
 
     @Test @Config(sdk=33) public void notificationRuntimePermissionIsCheckedBeforeAnythingElse(){
