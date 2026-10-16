@@ -53,6 +53,13 @@ public final class TaskNotifications {
         return manager != null && manager.areNotificationsEnabled();
     }
 
+    static boolean canNotifyChannel(Context context, String channelId) {
+        if (!canNotify(context)) return false;
+        ensureChannel(context);
+        NotificationChannel channel = context.getSystemService(NotificationManager.class).getNotificationChannel(channelId);
+        return channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+    }
+
     private static PendingIntent open(Context context) {return open(context,0);}
     private static PendingIntent open(Context context,long id) {
         return PendingIntent.getActivity(context,2,TaskSections.openIntent(context,id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
