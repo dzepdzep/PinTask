@@ -10,6 +10,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Icon;
+import android.media.AudioAttributes;
+import android.provider.Settings;
 import android.os.Build;
 import android.widget.RemoteViews;
 
@@ -19,7 +21,8 @@ import java.util.Date;
 /** Watch-compatible task notifications, optional phone-only pinning, and inline Quick Add. */
 public final class TaskNotifications {
     public static final String CHANNEL = "unfinished_tasks";
-    public static final String REMINDER_CHANNEL = "due_reminders_v2";
+    // New ID: Android does not allow apps to change the sound of an existing channel.
+    public static final String REMINDER_CHANNEL = "due_reminders_alarm_v3";
     public static final String ACTION_DONE = "com.pintask.app.ACTION_DONE";
     public static final String ACTION_UNDO = "com.pintask.app.ACTION_UNDO";
     public static final String ACTION_DISMISSED = "com.pintask.app.ACTION_DISMISSED";
@@ -42,8 +45,14 @@ public final class TaskNotifications {
         persistent.setSound(null, null);
         manager.createNotificationChannel(persistent);
         NotificationChannel due = new NotificationChannel(
-                REMINDER_CHANNEL, "Due reminders", NotificationManager.IMPORTANCE_HIGH);
-        due.setDescription("Alerts when a scheduled task is due");
+                REMINDER_CHANNEL, "Timed task alarms", NotificationManager.IMPORTANCE_HIGH);
+        due.setDescription("Audible alarm ringtone and vibration for scheduled tasks and snoozed reminders");
+        due.enableVibration(true);
+        due.setVibrationPattern(new long[]{0, 300, 180, 300, 180, 500});
+        AudioAttributes audio=new AudioAttributes.Builder()
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_ALARM).build();
+        due.setSound(Settings.System.DEFAULT_ALARM_ALERT_URI,audio);
         manager.createNotificationChannel(due);
     }
 
@@ -157,7 +166,7 @@ public final class TaskNotifications {
                 .setCustomContentView(compactTask(context, task, false))
                 .setStyle(new Notification.DecoratedCustomViewStyle())
                 .setSubText("PinTask · Tap Done to clear")
-                .setCategory(Notification.CATEGORY_REMINDER)
+                .setCategory(channel.equals(REMINDER_CHANNEL) ? Notification.CATEGORY_ALARM : Notification.CATEGORY_REMINDER)
                 .setContentIntent(open(context,task.id))
                 .setDeleteIntent(dismissed)
                 .setAutoCancel(false)
@@ -185,7 +194,7 @@ public final class TaskNotifications {
                 .setStyle(new Notification.DecoratedCustomViewStyle())
                 .setOnlyAlertOnce(true)
                 .setContentIntent(open(context,task.id))
-                .setCategory(Notification.CATEGORY_REMINDER)
+                .setCategory(Notification.CATEGORY_ALARM)
                 .setAutoCancel(true)
                 .setLocalOnly(!watchEnabled(context))
                 .addAction(done).addAction(snoozeAction(context, task.id))
