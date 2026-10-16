@@ -44,8 +44,7 @@ public class TimedAlarmUiTest {
             root=controller.get().getWindow().getDecorView();
             find(root,"Time · Optional").performClick();
             TimePickerDialog picker=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
-            picker.getTimePicker().setHour(10);
-            picker.getTimePicker().setMinute(0);
+            picker.updateTime(10,0);
             picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             root=controller.get().getWindow().getDecorView();
@@ -69,8 +68,7 @@ public class TimedAlarmUiTest {
             chooseTomorrow(controller.get());
             find(controller.get().getWindow().getDecorView(),"Time · Optional").performClick();
             TimePickerDialog picker=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
-            picker.getTimePicker().setHour(11);
-            picker.getTimePicker().setMinute(0);
+            picker.updateTime(11,0);
             picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             find(controller.get().getWindow().getDecorView(),"More options").performClick();
