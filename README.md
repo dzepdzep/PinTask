@@ -1,4 +1,13 @@
-# PinTask 3.1 — Automatic reminder-access checks on startup
+# PinTask 3.2 — Relative-time quick add, shift delays and clock pickers
+
+- **Tasks home Quick Add now has a compact time dropdown:** **Now** (the unchanged default), **In 5 minutes**, **In 10 minutes**, **In 15 minutes**, **In 30 minutes**, **In 1 hour**, or **Custom delay…**. Pick a delay before entering a task or pressing Add. A delayed task stays in your list but its **audible, pinned reminder is scheduled for the selected interval from when you tap Add**, not displayed early. Quick Add resets to Now after adding, preventing accidental future delays on the next task.
+- **Flexible custom delay entry:** Type **90 minutes**, **60 minutes**, **2 hours**, **1h 30m**, **1.5 hours**, or a plain number of minutes (1 minute through 30 days). Delays are saved as exact millisecond-based due times, without rounding to HH:mm.
+- **Work/shift task editor now offers relative alerts too:** **Or alert me → Choose a delay** has the same 5/10/15/30/60-minute options and custom entry. Relative alerts default to **At task time**, with advanced options still available; the task time is measured from Save. For tasks assigned to a shift, relative times must fall within the chosen shift. Out-of-shift delays are rejected without saving a task.
+- **No more typing 20:00 in Create custom shift:** **Shift begins** and **Shift ends** are buttons opening Android's built-in 24-hour clock picker, supporting overnight shifts.
+- **Preserves existing behavior and data:** Immediate Quick Add, absolute Time picker, advanced date/repeats, existing shift schedules and interactive guide remain as before. Android's exact-alarm permission and notification access are still required for prompt audible reminders. Relative-time scheduling does not guarantee alarm delivery when OEM battery restrictions apply.
+- **Tests:** Cover presets, free-text duration parser, independent delayed task alarm, shifting times without minute truncation, rejection outside shift, and native clock selection for overnight shifts.
+
+## PinTask 3.1 — Automatic reminder-access checks on startup
 
 - **Permission check every launch:** When PinTask opens, it checks Android notification permission, app-wide notification setting, the **Timed task alarms** and **Unfinished tasks** channels, and exact-alarm permission. Previously reviewed launches with all essential access enabled proceed without interruption. If anything required is blocked, PinTask shows a clear status checklist rather than silently assuming reminders will work.
 - **Guided permission approval:** Choose **Fix next** to request the Android 13+ notification runtime permission or open the specific Android notification channel / Alarms & reminders settings. On return to PinTask (or after responding to the runtime permission dialog), the app **checks the actual granted status again** and offers the next missing step. The user may press **Later** and keep using PinTask, but blocked/delayed alarm risks remain visible.
@@ -109,7 +118,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 3.1
+## Build and install 3.2
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
