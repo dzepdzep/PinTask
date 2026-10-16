@@ -76,7 +76,17 @@ public final class ShiftActivity extends Activity {
     }
     private void quickAdd(){
         String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
-        try(TaskStore store=new TaskStore(this)){TaskSections.addPersonal(store,title);}TaskWidget.refreshAll(this);quickDraft="";hideKeyboard();render();
+        TaskStore.Task task;
+        try(TaskStore store=new TaskStore(this)){task=TaskSections.addPersonal(store,title);}
+        TaskNotifications.show(this,task);
+        if(!TaskNotifications.canNotify(this)){
+            if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},44);
+            else toast("Enable PinTask notifications in Android settings to show new tasks.");
+        }else if(!TaskNotifications.canNotifyChannel(this,TaskNotifications.CHANNEL)){
+            toast("Enable the Unfinished tasks notification category in Android settings.");
+        }
+        TaskWidget.refreshAll(this);quickDraft="";hideKeyboard();render();
     }
     private void workPage(){
         if(detailRun>0){shiftTasksPage();return;}
