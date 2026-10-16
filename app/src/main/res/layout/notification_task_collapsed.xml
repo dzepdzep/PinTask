@@ -22,6 +22,24 @@
         android:textSize="14sp" />
 
     <TextView
+        android:id="@+id/notification_snooze"
+        android:layout_width="wrap_content"
+        android:layout_height="38dp"
+        android:minWidth="66dp"
+        android:layout_marginEnd="6dp"
+        android:gravity="center"
+        android:background="@drawable/notification_snooze_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="Snooze task"
+        android:text="Snooze"
+        android:textColor="#142034"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp" />
+
+    <TextView
         android:id="@+id/notification_done"
         android:layout_width="wrap_content"
         android:layout_height="38dp"

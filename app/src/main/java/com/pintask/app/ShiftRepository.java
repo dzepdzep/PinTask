@@ -215,6 +215,17 @@ public final class ShiftRepository implements AutoCloseable {
             db.setTransactionSuccessful();return result;
         } finally {db.endTransaction();}
     }
+    /** Batch-schedule a saved custom shift type; conflicts roll back every chosen day. */
+    public List<Run> scheduleCustomDates(List<java.time.LocalDate> dates,long templateId,boolean allowOverlap) {
+        List<java.time.LocalDate> selected=checkedDates(dates);
+        SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
+        try {
+            List<Run> result=new ArrayList<>();
+            for(java.time.LocalDate day:selected)result.add(scheduleCustom(day,templateId,allowOverlap));
+            db.setTransactionSuccessful();
+            return result;
+        } finally {db.endTransaction();}
+    }
     /** Copies all selected groups on the source date into empty destination days. */
     public List<Run> copyDay(java.time.LocalDate source,List<java.time.LocalDate> dates,boolean allowOverlap) {
         List<java.time.LocalDate> selected=checkedDates(dates);
@@ -277,8 +288,8 @@ public final class ShiftRepository implements AutoCloseable {
         }
     }
 
-    /** Calendar choices need neither a template nor any tasks. Existing tasks are never removed. */
-    public Run schedule(java.time.LocalDate date, String label) {
+    /** Legacy preset API kept for existing imports and tests; new UI uses custom types. */
+    public Run schedule(java.time.LocalDate date,String label) {
         return schedule(date,label,false);
     }
     public Run schedule(java.time.LocalDate date,String label,boolean allowOverlap) {
@@ -290,12 +301,26 @@ public final class ShiftRepository implements AutoCloseable {
             case "Off": start=0; duration=1440; break;
             default: throw new IllegalArgumentException("Choose a shift");
         }
-        long starts = date.atTime(start/60,start%60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
-        long ends = ShiftTimes.atMinuteOffset(starts, duration);
-        SQLiteDatabase db = store.getWritableDatabase();
+        return insertRun(date,label,start,duration,0,allowOverlap);
+    }
+
+    /** Schedule custom hours without automatically adding any task rules. */
+    public Run scheduleCustom(java.time.LocalDate date,long templateId,boolean allowOverlap) {
+        Template template=findTemplate(templateId);
+        if(template==null)throw new IllegalArgumentException("Choose a saved custom shift");
+        long start=date.atTime(template.startMinute/60,template.startMinute%60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        if(ShiftTimes.atMinuteOffset(start,template.durationMinutes)<=System.currentTimeMillis())
+            throw new IllegalArgumentException("Choose a shift that has not ended");
+        return insertRun(date,template.name,template.startMinute,template.durationMinutes,template.id,allowOverlap);
+    }
+
+    private Run insertRun(java.time.LocalDate date,String label,int start,int duration,long templateId,boolean allowOverlap) {
+        long starts=date.atTime(start/60,start%60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli();
+        long ends=ShiftTimes.atMinuteOffset(starts,duration);
+        SQLiteDatabase db=store.getWritableDatabase();
         db.beginTransaction();
         try {
-            List<Run> existing = runsForDate(date);
+            List<Run> existing=runsForDate(date);
             existing.removeIf(run->!run.group.equals(TaskGroups.newTaskGroup(context)));
             boolean marker=label.equals("Off");
             for(Run run:existing) {
@@ -303,24 +328,24 @@ public final class ShiftRepository implements AutoCloseable {
                     db.setTransactionSuccessful();return run;
                 }
             }
-            // Add complementary shifts; replacing a day label never cancels real shifts or tasks.
-            if(marker)for(Run run:existing)if(!run.dayLabel)throw new IllegalArgumentException("This day has a working shift. End it first before marking no shift.");
+            if(marker)for(Run run:existing)if(!run.dayLabel)
+                throw new IllegalArgumentException("This day has a working shift. End it first before marking no shift.");
             if(!marker && !allowOverlap) {
                 try(Cursor c=db.rawQuery("SELECT _id FROM shift_runs WHERE ended=0 AND day_label=0 AND started_at<? AND ends_at>?",new String[]{""+ends,""+starts})) {
-                    while(c.moveToNext()) if(findRun(c.getLong(0)).group.equals(TaskGroups.newTaskGroup(context)))
+                    while(c.moveToNext())if(findRun(c.getLong(0)).group.equals(TaskGroups.newTaskGroup(context)))
                         throw new IllegalArgumentException("This overlaps another scheduled shift.");
                 }
             }
             ContentValues closed=new ContentValues();closed.put("ended",1);
-            for(Run run:existing) if(run.dayLabel)db.update("shift_runs",closed,"_id=?",args(run.id));
+            for(Run run:existing)if(run.dayLabel)db.update("shift_runs",closed,"_id=?",args(run.id));
             ContentValues values=new ContentValues();
-            values.put("template_id",0); values.put("label",label);values.put("day_label",marker?1:0);
+            values.put("template_id",templateId);values.put("label",label);values.put("day_label",marker?1:0);
             values.put("task_group",TaskGroups.newTaskGroup(context));
-            values.put("started_at",starts); values.put("ends_at",ends);
+            values.put("started_at",starts);values.put("ends_at",ends);
             long id=db.insertOrThrow("shift_runs",null,values);
             db.setTransactionSuccessful();
             return findRun(id);
-        } finally { db.endTransaction(); }
+        } finally {db.endTransaction();}
     }
 
     /** Explicit occurrences stop at the shift end, including the morning after an ND. */

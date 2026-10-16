@@ -87,6 +87,7 @@ public final class TaskNotifications {
         compact.setTextViewText(R.id.notification_task_title,
                 dueNow ? "Due now: " + task.title : task.title);
         compact.setOnClickPendingIntent(R.id.notification_task_title, open(context, task.id));
+        compact.setOnClickPendingIntent(R.id.notification_snooze, snoozeIntent(context, task.id));
         compact.setOnClickPendingIntent(R.id.notification_done, doneIntent(context, task.id));
         return compact;
     }
@@ -117,11 +118,14 @@ public final class TaskNotifications {
                 priority == TaskStore.PRIORITY_LOW ? "Low priority" : "Normal priority";
     }
 
-    private static Notification.Action snoozeAction(Context context, long id) {
-        Intent intent = new Intent(context, SnoozeActivity.class).putExtra(EXTRA_ID,id);
-        PendingIntent pending = PendingIntent.getActivity(context,(int)id,intent,
+    private static PendingIntent snoozeIntent(Context context,long id) {
+        Intent intent=new Intent(context,SnoozeActivity.class).putExtra(EXTRA_ID,id);
+        return PendingIntent.getActivity(context,(int)id,intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        return new Notification.Action.Builder(Icon.createWithResource(context,R.drawable.ic_pin),"Snooze",pending).build();
+    }
+    private static Notification.Action snoozeAction(Context context, long id) {
+        return new Notification.Action.Builder(Icon.createWithResource(context,R.drawable.ic_pin),
+                "Snooze",snoozeIntent(context,id)).build();
     }
 
     public static void show(Context context, TaskStore.Task task) {

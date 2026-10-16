@@ -14,7 +14,7 @@ import static org.junit.Assert.*;
 @Config(sdk=28)
 public class SimplerHomeTest {
     Context context;
-    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().commit();}
+    @Before public void setup(){context=RuntimeEnvironment.getApplication();context.deleteDatabase("pintask.db");context.getSharedPreferences("settings",0).edit().clear().putBoolean("custom_shifts_guide_seen_v28",true).commit();}
     @Test public void oldEnabledSettingAndTaggedShortcutAreClearedWithoutRemovingTasks() {
         NotificationManager manager=context.getSystemService(NotificationManager.class);TaskNotifications.ensureChannel(context);
         context.getSharedPreferences("settings",0).edit().putBoolean("quick_add",true).commit();
@@ -43,11 +43,17 @@ public class SimplerHomeTest {
     @Test public void calendarShiftPickerCreatesPlanWithoutShowingTemplateEditorOrTaskForm() {
         try(org.robolectric.android.controller.ActivityController<ShiftActivity> controller=Robolectric.buildActivity(ShiftActivity.class).setup()) {
             find(controller.get().getWindow().getDecorView(),"Work").performClick();
+            try(ShiftRepository custom=new ShiftRepository(context)){custom.addTemplate("Night Custom",1200,480);}
             find(controller.get().getWindow().getDecorView(),"Set a shift").performClick();View root=controller.get().getWindow().getDecorView();assertNull(find(root,"Optional templates"));assertNull(find(root,"End / clear TD"));
             android.app.DatePickerDialog datePicker=(android.app.DatePickerDialog)org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();datePicker.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            dialog.getListView().performItemClick(dialog.getListView().getChildAt(1),1,1);
-            try(ShiftRepository shifts=new ShiftRepository(context)){assertEquals("ND",shifts.runsForDate(java.time.LocalDate.now()).get(0).label);assertTrue(shifts.templates().isEmpty());}
+            assertEquals("Night Custom · 20:00–08:00 (+1 day)",dialog.getListView().getAdapter().getItem(0));
+            assertEquals(3,dialog.getListView().getAdapter().getCount());
+            dialog.getListView().performItemClick(dialog.getListView().getChildAt(0),0,0);
+            try(ShiftRepository shifts=new ShiftRepository(context)){
+                assertEquals("Night Custom",shifts.runsForDate(java.time.LocalDate.now()).get(0).label);
+                assertEquals(1,shifts.templates().size());
+            }
         }
     }
     @Test public void oldPinnedLauncherAlsoOpensTheSimpleHome() {

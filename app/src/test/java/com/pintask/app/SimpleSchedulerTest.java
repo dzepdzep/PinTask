@@ -21,6 +21,7 @@ public class SimpleSchedulerTest {
     Context context; TaskStore store; ShiftRepository shifts;
     @Before public void setup() {
         context=RuntimeEnvironment.getApplication(); context.deleteDatabase("pintask.db");
+        context.getSharedPreferences("settings",0).edit().putBoolean("custom_shifts_guide_seen_v28",true).commit();
         store=new TaskStore(context); shifts=new ShiftRepository(context);
     }
     @After public void close() { shifts.close(); store.close(); }
@@ -104,7 +105,8 @@ public class SimpleSchedulerTest {
             android.app.DatePickerDialog datePicker=(android.app.DatePickerDialog)org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();datePicker.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             android.app.AlertDialog dialog=org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
-            assertEquals("ND · 20:00–08:00 next day",dialog.getListView().getAdapter().getItem(1));
+            assertEquals("＋ Create custom shift",dialog.getListView().getAdapter().getItem(0));
+            assertEquals("Off · no shift",dialog.getListView().getAdapter().getItem(1));
         }
     }
     @Test public void rebootRestoresRemindersAndClaimsEachOccurrenceOnlyOnce() {
