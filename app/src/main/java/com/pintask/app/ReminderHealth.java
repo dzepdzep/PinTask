@@ -103,7 +103,7 @@ final class ReminderHealth {
                 }).show();
     }
 
-    static int enableExistingTimed(Activity a) {
+    static int enableExistingTimed(android.content.Context a) {
         int count;
         try(TaskStore store=new TaskStore(a)) {
             android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();
