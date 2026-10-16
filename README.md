@@ -1,4 +1,13 @@
-# PinTask 2.9 — Interactive shift setup tour
+# PinTask 3.0 — Audible scheduled alarms and reminder reliability
+
+- **Timed tasks are no longer silent by default:** When you select a time in the three-tab Tasks/Work editor, PinTask automatically selects **At task time**, with that alarm status shown on the task editor. You can deliberately choose **No reminder** under More options. Untimed quick-added items continue to appear immediately as persistent, quiet tasks.
+- **Real alarm-like notification sound:** Timed reminders, scheduled work tasks, early alerts and snoozes now use a NEW high-importance Android channel **Timed task alarms** with the system default alarm ringtone, alarm audio usage and vibration. A new channel is essential because Android won't let an update rewrite an existing channel's sound. The sound plays once per alert, not continuously until Done. Exact timing still requires Android's Alarms & reminders permission, and sounds depend on phone volume, Do Not Disturb and system/OEM restrictions.
+- **Reminder health check:** More → Reminder health check shows notification permission, timed-alert channel, exact-alarm permission, and alarm volume. Use **Play an alarm notification now** to check sound or **Schedule an alarm test in 60 seconds** and lock the phone to test background delivery.
+- **Recover silent existing tasks:** An explicit, confirmed option enables At task time for future unfinished timed tasks currently configured with No reminder. This intentionally also changes tasks you deliberately kept silent; no database migration silently changes your existing settings.
+- **Clear warnings:** When saving an audible timed task, the app asks you to fix blocked notifications or denied exact-alarm permission; Android can otherwise skip or delay alerts. Users must verify critical reminders on their physical devices. The app cannot guarantee timing under battery restrictions.
+- **Regression tests:** Cover the alarm sound channel and audio usage, delivered notifications and due channel, simultaneous reminders, scheduled AlarmManager PendingIntents, and user-approved migration of old silent tasks, as well as the actual editor's new default.
+
+## PinTask 2.9 — Interactive shift setup tour
 
 - **Real, in-app walkthrough instead of message-only instructions.** Work → How to set up shifts or More → Interactive shift guide starts a spotlight tour that highlights the **actual clickable controls**. Follow Work → Create custom shift → Set a shift → Add task to this shift → Task name → Time → More options → Reminder → Save task → Save as template.
 - **Use the real screens:** The highlighted control is tappable, or use the tour panel's matching action. Shift creation, date selection, the reminder dropdown and task saving all use the existing app features—no fake sample tasks or data migration.
@@ -91,7 +100,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 2.9
+## Build and install 3.0
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
