@@ -26,6 +26,7 @@ public class QualityOfLifeTest {
     private ShiftRepository shifts;
     @Before public void setup() {
         context=RuntimeEnvironment.getApplication(); context.deleteDatabase("pintask.db");
+        context.getSharedPreferences("settings",0).edit().putBoolean("custom_shifts_guide_seen_v28",true).commit();
         store=new TaskStore(context); shifts=new ShiftRepository(context);
     }
     @After public void cleanup() { shifts.close(); store.close(); }
