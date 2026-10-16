@@ -30,7 +30,7 @@ public final class TaskActionReceiver extends BroadcastReceiver {
         long id = intent.getLongExtra(TaskNotifications.EXTRA_ID, -1);
         if (id <= 0) return;
         if (TaskNotifications.ACTION_REMINDER.equals(action)) {
-            ReminderScheduler.deliver(context, id);
+            ReminderScheduler.deliverDue(context);
         } else if (TaskNotifications.ACTION_DONE.equals(action)) {
             try (TaskStore store = new TaskStore(context)) {
                 TaskStore.Completion completion = store.complete(id);

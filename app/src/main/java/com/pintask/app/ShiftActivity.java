@@ -133,6 +133,7 @@ public final class ShiftActivity extends Activity {
         tool("Completed tasks","Your finished task history",()->{screen=HISTORY;render();});tool("Task bundles","Reuse a set of tasks",()->TaskBundles.show(this,this::render));
         section("WORK SETUP");tool("Saved shift templates","Optional templates and task rules",()->startActivity(new Intent(this,LegacyShiftActivity.class)));
         section("SETTINGS");tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
+        tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
         text("PinTask 2.4",12);
@@ -223,6 +224,21 @@ public final class ShiftActivity extends Activity {
         body=main;
         primary("Save task",this::saveTask);
     }
+    private void reminderTimingSettings() {
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle("Reminder timing")
+                .setMessage("Allow alarms and reminders so timed tasks can arrive close to their chosen time, including while the phone is asleep. Without access, Android may delay them.")
+                .setNegativeButton("Close", null);
+        if (Build.VERSION.SDK_INT >= 31) dialog.setPositiveButton("Open settings", (d, which) -> {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                        android.net.Uri.parse("package:" + getPackageName())));
+            } catch (android.content.ActivityNotFoundException unavailable) {
+                toast("Open Android settings, then Special app access → Alarms & reminders.");
+            }
+        });
+        dialog.show();
+    }
+
     private void saveTask() {
         remember();
         try {
