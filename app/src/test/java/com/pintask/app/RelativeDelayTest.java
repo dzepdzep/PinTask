@@ -83,7 +83,6 @@ public class RelativeDelayTest {
             stopwatch.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             root=controller.get().getWindow().getDecorView();
-            System.out.println("PIN_STOPWATCH_DEBUG: "+allLabels(root));
             assertNotNull("After selection: "+allLabels(root),
                     find(root,"When: In 1h 30m 12s  ▾"));
             firstTextField(root).setText("Stopwatch seconds test");
