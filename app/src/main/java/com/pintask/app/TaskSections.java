@@ -19,6 +19,6 @@ final class TaskSections {
     }
     static TaskStore.Task addPersonal(TaskStore store,String title) {
         android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
-        try{TaskStore.Task task=store.add(title,1,0,0,-2);task=store.setGroup(task.id,"");db.setTransactionSuccessful();return task;}finally{db.endTransaction();}
+        try{TaskStore.Task task=store.add(title,1,0,0,-1);task=store.setGroup(task.id,"");db.setTransactionSuccessful();return task;}finally{db.endTransaction();}
     }
 }
