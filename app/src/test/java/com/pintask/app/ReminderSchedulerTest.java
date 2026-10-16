@@ -26,6 +26,50 @@ public class ReminderSchedulerTest {
     }
     @After public void close(){store.close();}
 
+    @Test public void upgradedInstallUsesAudibleAlarmSoundAndVibrationChannel() {
+        TaskNotifications.ensureChannel(context);
+        NotificationChannel channel=notifications.getNotificationChannel(TaskNotifications.REMINDER_CHANNEL);
+        assertNotNull(channel);
+        assertEquals(NotificationManager.IMPORTANCE_HIGH,channel.getImportance());
+        assertEquals(android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI,channel.getSound());
+        assertNotNull(channel.getAudioAttributes());
+        assertEquals(android.media.AudioAttributes.USAGE_ALARM,channel.getAudioAttributes().getUsage());
+        assertTrue(channel.shouldVibrate());
+        TaskStore.Task task=store.add("Alarm should sound",1,System.currentTimeMillis()-1500,0,0);
+        ReminderScheduler.deliverDue(context);
+        assertEquals(1,notifications.getActiveNotifications().length);
+        android.app.Notification sent=Shadows.shadowOf(notifications).getNotification((int)task.id);
+        assertNotNull(sent);
+        assertEquals(TaskNotifications.REMINDER_CHANNEL,sent.getChannelId());
+        assertEquals(task.id,store.find(task.id).id);
+        assertTrue(store.find(task.id).remindedAt>0);
+    }
+
+    @Test public void intentionallyConfirmedRecoveryFixesOldSilentTasksOnly() {
+        long next=System.currentTimeMillis()+300_000;
+        TaskStore.Task silent=store.add("Silent old",1,next,0,TaskStore.REMINDER_OFF);
+        TaskStore.Task alreadyOn=store.add("Enabled",1,next,0,0);
+        TaskStore.Task untimed=store.add("Untimed",1,0,0,TaskStore.REMINDER_OFF);
+        assertEquals(TaskStore.REMINDER_OFF,store.find(silent.id).notifyBeforeMinutes);
+        assertEquals(1,ReminderHealth.enableExistingTimed(context));
+        assertEquals(0,store.find(silent.id).notifyBeforeMinutes);
+        assertEquals(0,store.find(alreadyOn.id).notifyBeforeMinutes);
+        assertEquals(TaskStore.REMINDER_OFF,store.find(untimed.id).notifyBeforeMinutes);
+        assertEquals(2,Shadows.shadowOf(alarms).getScheduledAlarms().size());
+        assertEquals(0,ReminderHealth.enableExistingTimed(context));
+    }
+
+    @Test public void aScheduledAlarmFromReceiverDeliversAllThreeWithAudibleChannel() {
+        long due=System.currentTimeMillis()-2000;
+        for(int i=0;i<3;i++)store.add("Patient task "+i,1,due,0,0);
+        new TaskActionReceiver().onReceive(context,new Intent(context,TaskActionReceiver.class)
+                .setAction(TaskNotifications.ACTION_REMINDER).putExtra(TaskNotifications.EXTRA_ID,1L));
+        assertEquals(3,notifications.getActiveNotifications().length);
+        for(var posted:notifications.getActiveNotifications()) {
+            assertEquals(TaskNotifications.REMINDER_CHANNEL,posted.getNotification().getChannelId());
+        }
+    }
+
     @Test public void threeSimultaneousAlarmsHaveIndependentIdentitiesAndCancellation() {
         long time=System.currentTimeMillis()+600_000;
         TaskStore.Task a=store.add("A",1,time,0,0);
