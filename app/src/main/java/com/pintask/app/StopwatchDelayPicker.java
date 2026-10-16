@@ -95,36 +95,31 @@ final class StopwatchDelayPicker {
         TextView hint=label(activity,"The countdown starts when you save the task.",12);
         content.addView(hint);
 
-        for(int i=0;i<3;i++){
-            LinearLayout cell=(LinearLayout)wheels.getChildAt(i);
-            NumberPicker picker=(NumberPicker)cell.getChildAt(1);
-            final int index=i;
-            picker.setOnValueChangedListener((view,oldValue,newValue)->{
-                if(index==0)h[0]=newValue;
-                else if(index==1)m[0]=newValue;
-                else s[0]=newValue;
-                long total=(long)h[0]*3600+m[0]*60+s[0];
-                preview.setText(total>MAX_SECONDS?"Maximum 30 days":display((int)total));
-            });
-        }
-
         AlertDialog dialog=new AlertDialog.Builder(activity)
                 .setTitle("Custom delay · Stopwatch")
                 .setView(content)
                 .setNegativeButton("Cancel",null)
-                .setPositiveButton("Set delay",null).create();
+                .setPositiveButton("Set delay",(d,w)->{
+                    try{
+                        int duration=toSeconds(pickers[0].getValue(),pickers[1].getValue(),pickers[2].getValue());
+                        saveSeconds.accept(duration);
+                    }catch(IllegalArgumentException wrong){
+                        // Protect against invalid values even if the OS dispatches a disabled button.
+                        android.widget.Toast.makeText(activity,wrong.getMessage(),android.widget.Toast.LENGTH_LONG).show();
+                    }
+                }).create();
+        for(NumberPicker picker:pickers){
+            picker.setOnValueChangedListener((view,oldValue,newValue)->{
+                int total=pickers[0].getValue()*3600+pickers[1].getValue()*60+pickers[2].getValue();
+                boolean valid=total>0&&total<=MAX_SECONDS;
+                preview.setText(valid?display(total):total==0?"Choose a duration":"Maximum 30 days");
+                android.widget.Button confirm=dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                if(confirm!=null)confirm.setEnabled(valid);
+            });
+        }
         android.view.inputmethod.InputMethodManager keyboard=
                 activity.getSystemService(android.view.inputmethod.InputMethodManager.class);
         if(keyboard!=null)keyboard.hideSoftInputFromWindow(activity.getWindow().getDecorView().getWindowToken(),0);
-        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
-            try{
-                int duration=toSeconds(pickers[0].getValue(),pickers[1].getValue(),pickers[2].getValue());
-                dialog.dismiss();
-                saveSeconds.accept(duration);
-            }catch(IllegalArgumentException wrong){
-                preview.setText(wrong.getMessage());
-            }
-        }));
         dialog.show();
         if(dialog.getWindow()!=null)dialog.getWindow().setSoftInputMode(
                 android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
