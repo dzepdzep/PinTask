@@ -1,4 +1,12 @@
-# PinTask 2.8 — Custom shifts and first-time guide
+# PinTask 2.9 — Interactive shift setup tour
+
+- **Real, in-app walkthrough instead of message-only instructions.** Work → How to set up shifts or More → Interactive shift guide starts a spotlight tour that highlights the **actual clickable controls**. Follow Work → Create custom shift → Set a shift → Add task to this shift → Task name → Time → More options → Reminder → Save task → Save as template.
+- **Use the real screens:** The highlighted control is tappable, or use the tour panel's matching action. Shift creation, date selection, the reminder dropdown and task saving all use the existing app features—no fake sample tasks or data migration.
+- **First launch and replay:** The app offers the interactive tour once and keeps it available from More. It can be exited without deleting data. During name entry a visible **Next: Choose task time** action moves the guide forward; optional template saving may be skipped at the last step.
+- **Safe on existing installations:** Previously saved tasks, shift templates, schedules, notification settings, Snooze/Done behavior and the database schema are unchanged. The guide only saves the shifts or tasks you actually create.
+- **Known limitations:** Android may control custom notification appearance, and precise reminders still require system permissions. The spotlight is designed for on-screen controls; dialog fields are explained directly in the corresponding real dialog.
+
+## PinTask 2.8 — Custom shifts and first-time guide
 
 - **No hardcoded TD1/TD2/ND choices for new shifts:** Work → Set a shift offers your saved custom shift types, Create custom shift, and Off. Existing TD/ND shift data and previously saved tasks stay untouched and readable.
 - **Create custom shift:** Choose any name and 24-hour start/end times (e.g. 08:00–20:00 or an overnight 20:00–08:00). Scheduling a shift does not force you to add tasks first. Reuse saved custom shift types for other dates or plan several dates.
@@ -83,7 +91,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 2.8
+## Build and install 2.9
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
