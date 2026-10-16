@@ -80,6 +80,7 @@ final class StartupAccess {
         afterStartup=completed;
         boolean reviewed=activity.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean(REVIEWED,false);
         activity.getSharedPreferences("settings",Context.MODE_PRIVATE).edit().putBoolean(REVIEWED,true).apply();
+        if(reviewed && nextRequired(activity)==READY){finishStartup();return;}
         activity.getWindow().getDecorView().postDelayed(()->{
             if(activity.isFinishing()||activity.isDestroyed())return;
             if(!reviewed || nextRequired(activity)!=READY) show(false);
