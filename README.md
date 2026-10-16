@@ -1,4 +1,12 @@
-# PinTask 2.6 — Quick Add notifications by default
+# PinTask 2.7 — One-tap Done in collapsed notifications
+
+- Unfinished task cards now provide a **Done** button directly in the collapsed notification (including shift tasks and due-now alerts), using Android's decorated custom notification layout. No expand tap is required on Android builds that render custom compact notifications.
+- The existing expanded **Done** and **Snooze** actions, Wear OS Done action, task IDs, background completion and undo are preserved. Tapping the title still opens the task.
+- The compact Done action removes only its own task notification; other tasks remain. A long title is truncated to leave room for Done.
+- Android / OEM notification layouts can vary, so test on the target phone. The OS may override or hide custom views; the expanded Done action remains available as a fallback.
+- Successful signed builds on the main branch now publish a matching versioned GitHub Release containing the installable APK and SHA256SUMS. Each version must increment versionCode and versionName.
+
+## PinTask 2.6 — Quick Add notifications by default
 
 - On **Tasks**, typing a name and tapping **Add** immediately posts an independent notification for that task. No date or time is required. Adding several tasks gives each its own Done action and notification ID.
 - When notification permission is missing, Quick Add requests it on Android 13+; granting permission displays still-unfinished tasks. Enable the **Unfinished tasks** notification category if individual task cards remain hidden.
@@ -66,9 +74,9 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 2.6
+## Build and install 2.7
 
-Actions → Build installable Android APK → Run workflow. Download the **PinTask-installable-apk** artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
+Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
 ## Important Android limitations
 

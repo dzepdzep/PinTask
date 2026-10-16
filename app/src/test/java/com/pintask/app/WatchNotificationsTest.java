@@ -22,8 +22,28 @@ public class WatchNotificationsTest {
         assertTrue(TaskNotifications.watchEnabled(context));assertEquals(0,n.flags&(Notification.FLAG_LOCAL_ONLY|Notification.FLAG_ONGOING_EVENT|Notification.FLAG_NO_CLEAR));
         assertEquals(2,n.actions.length);assertEquals("Snooze",n.actions[1].title.toString());assertEquals(1,new Notification.WearableExtender(n).getActions().size());Notification.Action done=watchDone(n);assertEquals("Done",done.title.toString());Notification.Action.WearableExtender action=new Notification.Action.WearableExtender(done);assertFalse(action.getHintLaunchesActivity());assertFalse(action.isAvailableOffline());Intent intent=Shadows.shadowOf(done.actionIntent).getSavedIntent();assertEquals(TaskNotifications.ACTION_DONE,intent.getAction());assertEquals(task.id,intent.getLongExtra(TaskNotifications.EXTRA_ID,0));assertEquals(TaskActionReceiver.class.getName(),intent.getComponent().getClassName());
     }
+    @Test public void collapsedTaskNotificationsExposeOneTapDoneWithoutLosingNativeActions() throws Exception {
+        TaskStore.Task first=store.add("One-tap checklist");
+        TaskStore.Task second=store.add("Second checklist");
+        TaskNotifications.show(context,first);
+        TaskNotifications.show(context,second);
+        Notification a=notification((int)first.id),b=notification((int)second.id);
+        assertNotNull(a.contentView);
+        assertNotNull(b.contentView);
+        assertEquals(R.layout.notification_task_collapsed,a.contentView.getLayoutId());
+        assertEquals(R.layout.notification_task_collapsed,b.contentView.getLayoutId());
+        assertEquals(2,a.actions.length);
+        assertEquals("Done",a.actions[0].title.toString());
+        assertEquals(first.id,Shadows.shadowOf(a.actions[0].actionIntent).getSavedIntent()
+                .getLongExtra(TaskNotifications.EXTRA_ID,0));
+        send(a.actions[0].actionIntent);
+        assertTrue(store.find(first.id).done);
+        assertFalse(store.find(second.id).done);
+        assertNull(notification((int)first.id));
+        assertNotNull(notification((int)second.id));
+    }
     @Test public void dueAlertsAlsoExposeWatchDone(){
-        TaskStore.Task task=store.add("Due",1,System.currentTimeMillis()-1000,0,-1);TaskNotifications.showDue(context,task);Notification n=notification(1000000000+(int)task.id);assertEquals(0,n.flags&(Notification.FLAG_LOCAL_ONLY|Notification.FLAG_ONGOING_EVENT|Notification.FLAG_NO_CLEAR));assertTrue((n.flags&Notification.FLAG_ONLY_ALERT_ONCE)!=0);assertEquals("Done",watchDone(n).title.toString());assertEquals(task.id,Shadows.shadowOf(watchDone(n).actionIntent).getSavedIntent().getLongExtra(TaskNotifications.EXTRA_ID,0));
+        TaskStore.Task task=store.add("Due",1,System.currentTimeMillis()-1000,0,-1);TaskNotifications.showDue(context,task);Notification n=notification(1000000000+(int)task.id);assertNotNull(n.contentView);assertEquals(R.layout.notification_task_collapsed,n.contentView.getLayoutId());assertEquals(0,n.flags&(Notification.FLAG_LOCAL_ONLY|Notification.FLAG_ONGOING_EVENT|Notification.FLAG_NO_CLEAR));assertTrue((n.flags&Notification.FLAG_ONLY_ALERT_ONCE)!=0);assertEquals("Done",watchDone(n).title.toString());assertEquals(task.id,Shadows.shadowOf(watchDone(n).actionIntent).getSavedIntent().getLongExtra(TaskNotifications.EXTRA_ID,0));
     }
     @Test public void watchDoneCompletesWithoutActivityAndClearsBothPhoneCards() throws Exception {
         TaskStore.Task task=store.add("Finish from wrist",1,System.currentTimeMillis()-1000,0,-1);TaskNotifications.show(context,task);TaskNotifications.showDue(context,task);PendingIntent callback=watchDone(notification((int)task.id)).actionIntent;send(callback);assertTrue(store.find(task.id).done);assertNull(notification((int)task.id));assertNull(notification(1000000000+(int)task.id));assertNull(Shadows.shadowOf((android.app.Application)context).getNextStartedActivity());
