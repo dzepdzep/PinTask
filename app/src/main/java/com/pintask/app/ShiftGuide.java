@@ -168,9 +168,16 @@ final class ShiftGuide {
             case SAVE:stage=SAVING;break;case TEMPLATE:stage=TEMPLATE_DIALOG;break;
         }
         if(previous==NAME){
-            real.requestFocus();
-            android.view.inputmethod.InputMethodManager input=a.getSystemService(android.view.inputmethod.InputMethodManager.class);
-            if(input!=null)input.showSoftInput(real,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            a.tourRefresh();
+            View field=a.tourTitleField();
+            if(field!=null){
+                field.requestFocus();
+                field.post(()->{
+                    android.view.inputmethod.InputMethodManager input=
+                        a.getSystemService(android.view.inputmethod.InputMethodManager.class);
+                    if(input!=null)input.showSoftInput(field,android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+                });
+            }
         }else real.performClick();
     }
     private void finishOverlay(){
