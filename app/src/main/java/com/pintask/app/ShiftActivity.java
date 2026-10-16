@@ -149,7 +149,10 @@ public final class ShiftActivity extends Activity {
         }
     }
     private void pickWorkDate(){
-        DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->{date=LocalDate.of(y,m+1,d);render();chooseShift();},date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());picker.setTitle("Choose work day");picker.show();
+        DatePickerDialog picker=new DatePickerDialog(this,(v,y,m,d)->{date=LocalDate.of(y,m+1,d);render();chooseShift();},date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());
+        picker.setTitle(tour.active()&&tour.stage()==ShiftGuide.DATE?"GUIDE · Choose when your shift happens":"Choose work day");
+        picker.setOnCancelListener(d->tour.cancelled(ShiftGuide.DATE,ShiftGuide.SET_SHIFT));
+        picker.show();
     }
     private void openEditor(boolean work,long run){
         remember();if(draft.isEmpty() || workEditor!=work)editorDate=work?date:LocalDate.now();if(run>0){ShiftRepository.Run chosen=repository.findRun(run);if(chosen!=null)editorDate=dateOf(chosen.startsAt);}if(workEditor!=work || (taskRun>0)!=(run>0))repeat=0;workEditor=work;taskRun=run;editorGroup=work?TaskGroups.newTaskGroup(this):"";screen=EDITOR;render();
@@ -182,10 +185,14 @@ public final class ShiftActivity extends Activity {
     private String clock(int minute){return String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60);}
 
     private void createCustomShift(boolean scheduleNow) {
+        boolean guided=tour!=null&&tour.active()&&tour.stage()==ShiftGuide.FORM;
         CustomShiftDialog.show(this,repository,template->{
-            if(scheduleNow)scheduleSelectedShift(template.id,false);
+            if(guided) {
+                tour.set(ShiftGuide.SET_SHIFT);
+                render();
+            } else if(scheduleNow)scheduleSelectedShift(template.id,false);
             else{render();toast("Custom shift saved. Choose it from Work → Set a shift.");}
-        });
+        },()->{if(guided)tour.cancelled(ShiftGuide.FORM,ShiftGuide.CREATE);},guided);
     }
 
     private void chooseCustomShift(boolean planning) {
@@ -197,7 +204,8 @@ public final class ShiftActivity extends Activity {
         }
         labels[types.size()]="＋ Create custom shift";
         labels[types.size()+1]="Off · no shift";
-        new AlertDialog.Builder(this).setTitle(planning?"Select custom shift":"Schedule a shift · "+date.format(DateTimeFormatter.ofPattern("d MMM")))
+        new AlertDialog.Builder(this).setTitle(tour.active()&&tour.stage()==ShiftGuide.DATE?
+                "GUIDE · Choose your saved custom shift":planning?"Select custom shift":"Schedule a shift · "+date.format(DateTimeFormatter.ofPattern("d MMM")))
             .setItems(labels,(d,index)->{
                 if(index==types.size()){
                     CustomShiftDialog.show(this,repository,template->{
@@ -209,13 +217,17 @@ public final class ShiftActivity extends Activity {
                     else scheduleSelectedShift(-1,false);
                 }else if(planning){planTemplateId=types.get(index).id;render();}
                 else scheduleSelectedShift(types.get(index).id,false);
-            }).setNegativeButton("Cancel",null).show();
+            }).setNegativeButton("Cancel",null)
+            .setOnCancelListener(d->tour.cancelled(ShiftGuide.DATE,ShiftGuide.SET_SHIFT))
+            .show();
     }
 
     private void scheduleSelectedShift(long templateId,boolean allowOverlap) {
         try {
             ShiftRepository.Run run=templateId<0?repository.schedule(date,"Off",allowOverlap):repository.scheduleCustom(date,templateId,allowOverlap);
-            if(templateId>=0){detailRun=run.id;screen=WORK;}
+            if(templateId>=0){detailRun=run.id;screen=WORK;
+                if(tour.active()&&tour.stage()==ShiftGuide.DATE)tour.set(ShiftGuide.ADD_TASK);
+            }
             TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);render();
         }catch(IllegalArgumentException e){
             if(!allowOverlap && e.getMessage().startsWith("This overlaps"))
