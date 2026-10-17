@@ -285,6 +285,34 @@ public final class TaskStore extends SQLiteOpenHelper {
         getWritableDatabase().delete("tasks", "_id=?", new String[]{Long.toString(id)});
     }
 
+    /** Stop this routine series without touching other routines or completed history. */
+    public synchronized List<Long> stopAutomaticRoutine(long id) {
+        Task task=find(id);
+        if(task==null||!task.autoRepeat)throw new IllegalArgumentException("Choose an active regular task");
+        long root=task.routineRoot;
+        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
+        try {
+            List<Long> canceled=new ArrayList<>();
+            long now=System.currentTimeMillis();
+            try(Cursor c=db.rawQuery("SELECT _id,due_at,reminded_at FROM tasks "+
+                    "WHERE routine_root=? AND done=0",new String[]{""+root})){
+                while(c.moveToNext()){
+                    long candidate=c.getLong(0);
+                    if(candidate!=id && c.getLong(1)>now && c.getLong(2)==0)canceled.add(candidate);
+                }
+            }
+            for(long future:canceled)db.delete("tasks","_id=?",new String[]{""+future});
+            ContentValues change=new ContentValues();
+            change.put("auto_repeat",0);
+            change.put("recurrence",REPEAT_NEVER);
+            change.put("repeat_after",0);
+            change.put("paused",0);
+            db.update("tasks",change,"routine_root=? AND done=0",new String[]{""+root});
+            db.setTransactionSuccessful();
+            return canceled;
+        }finally{db.endTransaction();}
+    }
+
     public synchronized void stopRepeating(long id) {
         ContentValues values = new ContentValues();
         values.put("recurrence", REPEAT_NEVER);values.put("paused",0);values.put("repeat_after",0);
