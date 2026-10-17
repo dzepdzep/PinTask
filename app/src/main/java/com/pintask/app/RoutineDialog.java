@@ -2,7 +2,6 @@ package com.pintask.app;
 
 import android.app.*;
 import android.content.*;
-import android.graphics.Color;
 import android.text.InputFilter;
 import android.widget.*;
 import android.view.*;
@@ -38,7 +37,6 @@ final class RoutineDialog {
                 android.R.layout.simple_spinner_dropdown_item,TYPES);
         type.setAdapter(adapter);content.addView(type);
         TextView explanation=new TextView(activity);
-        explanation.setTextColor(Color.DKGRAY);
         content.addView(explanation);
         LinearLayout times=new LinearLayout(activity);times.setOrientation(LinearLayout.VERTICAL);
         content.addView(times);
