@@ -20,9 +20,9 @@ public class WatchNotificationsTest {
     @Test public void taskCardsCanBridgeAndExposeOnlyBackgroundDoneOnWatch(){
         TaskStore.Task task=store.add("Watch task");TaskNotifications.show(context,task);Notification n=notification((int)task.id);
         assertTrue(TaskNotifications.watchEnabled(context));assertEquals(0,n.flags&(Notification.FLAG_LOCAL_ONLY|Notification.FLAG_ONGOING_EVENT|Notification.FLAG_NO_CLEAR));
-        assertEquals(2,n.actions.length);assertEquals("Snooze",n.actions[1].title.toString());assertEquals(1,new Notification.WearableExtender(n).getActions().size());Notification.Action done=watchDone(n);assertEquals("Done",done.title.toString());Notification.Action.WearableExtender action=new Notification.Action.WearableExtender(done);assertFalse(action.getHintLaunchesActivity());assertFalse(action.isAvailableOffline());Intent intent=Shadows.shadowOf(done.actionIntent).getSavedIntent();assertEquals(TaskNotifications.ACTION_DONE,intent.getAction());assertEquals(task.id,intent.getLongExtra(TaskNotifications.EXTRA_ID,0));assertEquals(TaskActionReceiver.class.getName(),intent.getComponent().getClassName());
+        assertTrue(n.actions==null || n.actions.length==0);assertEquals(1,new Notification.WearableExtender(n).getActions().size());Notification.Action done=watchDone(n);assertEquals("Done",done.title.toString());Notification.Action.WearableExtender action=new Notification.Action.WearableExtender(done);assertFalse(action.getHintLaunchesActivity());assertFalse(action.isAvailableOffline());Intent intent=Shadows.shadowOf(done.actionIntent).getSavedIntent();assertEquals(TaskNotifications.ACTION_DONE,intent.getAction());assertEquals(task.id,intent.getLongExtra(TaskNotifications.EXTRA_ID,0));assertEquals(TaskActionReceiver.class.getName(),intent.getComponent().getClassName());
     }
-    @Test public void collapsedTaskNotificationsExposeOneTapDoneWithoutLosingNativeActions() throws Exception {
+    @Test public void separateReadableCustomTaskNotificationsHaveNoDuplicateNativeActions() throws Exception {
         TaskStore.Task first=store.add("One-tap checklist");
         TaskStore.Task second=store.add("Second checklist");
         TaskNotifications.show(context,first);
@@ -32,13 +32,13 @@ public class WatchNotificationsTest {
         assertNotNull(b.contentView);
         assertEquals(R.layout.notification_task_collapsed,a.contentView.getLayoutId());
         assertEquals(R.layout.notification_task_collapsed,b.contentView.getLayoutId());
-        assertEquals(2,a.actions.length);
-        assertEquals("Done",a.actions[0].title.toString());
-        assertEquals("Snooze",a.actions[1].title.toString());
-        assertEquals(SnoozeActivity.class.getName(),Shadows.shadowOf(a.actions[1].actionIntent).getSavedIntent().getComponent().getClassName());
-        assertEquals(first.id,Shadows.shadowOf(a.actions[0].actionIntent).getSavedIntent()
+        assertTrue(a.actions==null || a.actions.length==0);
+        assertTrue(b.actions==null || b.actions.length==0);
+        assertEquals("One-tap checklist",a.extras.getCharSequence(Notification.EXTRA_TITLE));
+        assertEquals("Second checklist",b.extras.getCharSequence(Notification.EXTRA_TITLE));
+        assertEquals(first.id,Shadows.shadowOf(watchDone(a).actionIntent).getSavedIntent()
                 .getLongExtra(TaskNotifications.EXTRA_ID,0));
-        send(a.actions[0].actionIntent);
+        send(watchDone(a).actionIntent);
         assertTrue(store.find(first.id).done);
         assertFalse(store.find(second.id).done);
         assertNull(notification((int)first.id));
