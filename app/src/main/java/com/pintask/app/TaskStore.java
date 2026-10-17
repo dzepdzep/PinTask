@@ -24,7 +24,7 @@ public final class TaskStore extends SQLiteOpenHelper {
     private final Context context;
 
     public TaskStore(Context context) {
-        super(context.getApplicationContext(), "pintask.db", null, 8);
+        super(context.getApplicationContext(), "pintask.db", null, 9);
         this.context=context.getApplicationContext();
     }
 
@@ -46,7 +46,8 @@ public final class TaskStore extends SQLiteOpenHelper {
                 "next_task_id INTEGER NOT NULL DEFAULT 0," +
                 "task_group TEXT NOT NULL DEFAULT ''," +
                 "notes TEXT NOT NULL DEFAULT '', checklist TEXT NOT NULL DEFAULT '[]'," +
-                "paused INTEGER NOT NULL DEFAULT 0, repeat_after INTEGER NOT NULL DEFAULT 0, repeat_anchor INTEGER NOT NULL DEFAULT 0)");
+                "paused INTEGER NOT NULL DEFAULT 0, repeat_after INTEGER NOT NULL DEFAULT 0, repeat_anchor INTEGER NOT NULL DEFAULT 0," +
+                "auto_repeat INTEGER NOT NULL DEFAULT 0, routine_root INTEGER NOT NULL DEFAULT 0)");
         ShiftRepository.createTables(db);
         createFavorites(db);
         createBundles(db);
@@ -85,6 +86,10 @@ public final class TaskStore extends SQLiteOpenHelper {
             createBundles(db);
         }
         if(oldVersion<8) ShiftRepository.upgradeTables(db);
+        if(oldVersion<9){
+            db.execSQL("ALTER TABLE tasks ADD COLUMN auto_repeat INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE tasks ADD COLUMN routine_root INTEGER NOT NULL DEFAULT 0");
+        }
     }
 
     static void createBundles(SQLiteDatabase db) {
@@ -152,6 +157,56 @@ public final class TaskStore extends SQLiteOpenHelper {
         values.put("shift_run_id", shiftRunId);
         values.put("shift_label", shiftLabel);
         return db.insertOrThrow("tasks", null, values);
+    }
+
+    /** Opt-in routine generation: existing repeating tasks keep their old Done-first behavior. */
+    public synchronized Task enableAutomaticRoutine(long id) {
+        Task task=find(id);
+        if(task==null||task.shiftRunId!=0||task.recurrence==0||task.dueAt<=0)
+            throw new IllegalArgumentException("Choose a scheduled repeating personal task");
+        ContentValues values=new ContentValues();
+        values.put("auto_repeat",1);
+        values.put("routine_root",id);
+        getWritableDatabase().update("tasks",values,"_id=?",new String[]{""+id});
+        return find(id);
+    }
+
+    /** Idempotent; at most one future task is linked to each delivered routine alert. */
+    public synchronized Task createNextRoutineOccurrence(long id) {
+        SQLiteDatabase db=getWritableDatabase();
+        db.beginTransaction();
+        try{
+            Task previous=findIn(db,id);
+            if(previous==null||previous.done||!previous.autoRepeat||previous.repeatAfter||
+                    previous.paused||previous.recurrence==0||previous.remindedAt==0){
+                db.setTransactionSuccessful();return null;
+            }
+            long linked=linkedNext(db,id);
+            if(linked>0){db.setTransactionSuccessful();return null;}
+            long now=System.currentTimeMillis();
+            long nextDue=nextDue(previous,now);
+            long newId=insert(db,previous.title,now,previous.priority,nextDue,
+                    previous.recurrence,previous.notifyBeforeMinutes,0,"");
+            ContentValues values=new ContentValues();
+            values.put("auto_repeat",1);
+            values.put("routine_root",previous.routineRoot>0?previous.routineRoot:previous.id);
+            values.put("task_group",previous.group);
+            values.put("notes",previous.notes);
+            values.put("checklist",TaskDetails.reset(previous.checklist));
+            db.update("tasks",values,"_id=?",new String[]{""+newId});
+            ContentValues link=new ContentValues();
+            link.put("next_task_id",newId);
+            db.update("tasks",link,"_id=?",new String[]{""+id});
+            Task next=findIn(db,newId);
+            db.setTransactionSuccessful();return next;
+        }finally{db.endTransaction();}
+    }
+
+    private static long linkedNext(SQLiteDatabase db,long id) {
+        try(Cursor cursor=db.rawQuery("SELECT next_task_id FROM tasks WHERE _id=?",
+                new String[]{""+id})){
+            return cursor.moveToFirst()?cursor.getLong(0):0;
+        }
     }
 
     public synchronized Task updateTiming(long id, long dueAt, int recurrence, int early) {
@@ -336,16 +391,25 @@ public final class TaskStore extends SQLiteOpenHelper {
             }
             Task next = null;
             if (original.recurrence != REPEAT_NEVER && original.dueAt > 0) {
-                long nextDue = nextDue(original,now);
-                long nextId = insert(db, original.title, now, original.priority,
-                        nextDue, original.recurrence, original.notifyBeforeMinutes, 0, "");
-                next = new Task(nextId, original.title, now, false, 0, original.priority,
-                        nextDue, original.recurrence, 0, original.notifyBeforeMinutes, 0, "");
-                next=setGroup(nextId,original.group);
-                next=saveDetails(nextId,original.notes,TaskDetails.reset(original.checklist),original.repeatAfter);
-                ContentValues link = new ContentValues();
-                link.put("next_task_id", nextId);
-                db.update("tasks", link, "_id=?", new String[]{Long.toString(id)});
+                long linked=linkedNext(db,id);
+                if(linked>0) next=findIn(db,linked);
+                else {
+                    long nextDue=nextDue(original,now);
+                    long nextId=insert(db,original.title,now,original.priority,nextDue,
+                            original.recurrence,original.notifyBeforeMinutes,0,"");
+                    ContentValues options=new ContentValues();
+                    options.put("task_group",original.group);
+                    options.put("notes",original.notes);
+                    options.put("checklist",TaskDetails.reset(original.checklist));
+                    options.put("repeat_after",original.repeatAfter?1:0);
+                    options.put("auto_repeat",original.autoRepeat?1:0);
+                    options.put("routine_root",original.routineRoot);
+                    db.update("tasks",options,"_id=?",new String[]{""+nextId});
+                    ContentValues link=new ContentValues();
+                    link.put("next_task_id",nextId);
+                    db.update("tasks",link,"_id=?",new String[]{""+id});
+                    next=findIn(db,nextId);
+                }
             }
             db.setTransactionSuccessful();
             return new Completion(original, next);
@@ -511,6 +575,8 @@ public final class TaskStore extends SQLiteOpenHelper {
         task.checklist=cursor.getString(cursor.getColumnIndexOrThrow("checklist"));
         task.paused=cursor.getInt(cursor.getColumnIndexOrThrow("paused"))!=0;
         task.repeatAfter=cursor.getInt(cursor.getColumnIndexOrThrow("repeat_after"))!=0;
+        task.autoRepeat=cursor.getInt(cursor.getColumnIndexOrThrow("auto_repeat"))!=0;
+        task.routineRoot=cursor.getLong(cursor.getColumnIndexOrThrow("routine_root"));
         task.group=cursor.getString(cursor.getColumnIndexOrThrow("task_group"));
         task.snoozedUntil = cursor.getLong(cursor.getColumnIndexOrThrow("snoozed_until"));
         return task;
@@ -530,10 +596,10 @@ public final class TaskStore extends SQLiteOpenHelper {
         public final int notifyBeforeMinutes;
         public final long shiftRunId;
         public final String shiftLabel;
-        public long snoozedUntil,repeatAnchor;
+        public long snoozedUntil,repeatAnchor,routineRoot;
         public String group="";
         public String notes="", checklist="[]";
-        public boolean paused, repeatAfter;
+        public boolean paused, repeatAfter, autoRepeat;
 
         Task(long id, String title, long createdAt, boolean done, long completedAt,
                 int priority, long dueAt, int recurrence, long remindedAt, int notifyBeforeMinutes,
