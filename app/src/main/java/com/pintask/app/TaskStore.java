@@ -87,9 +87,16 @@ public final class TaskStore extends SQLiteOpenHelper {
         }
         if(oldVersion<8) ShiftRepository.upgradeTables(db);
         if(oldVersion<9){
-            db.execSQL("ALTER TABLE tasks ADD COLUMN auto_repeat INTEGER NOT NULL DEFAULT 0");
-            db.execSQL("ALTER TABLE tasks ADD COLUMN routine_root INTEGER NOT NULL DEFAULT 0");
+            ensureTaskColumn(db,"auto_repeat","INTEGER NOT NULL DEFAULT 0");
+            ensureTaskColumn(db,"routine_root","INTEGER NOT NULL DEFAULT 0");
         }
+    }
+
+    private static void ensureTaskColumn(SQLiteDatabase db,String name,String type) {
+        try(Cursor c=db.rawQuery("PRAGMA table_info(tasks)",null)){
+            while(c.moveToNext())if(name.equals(c.getString(1)))return;
+        }
+        db.execSQL("ALTER TABLE tasks ADD COLUMN "+name+" "+type);
     }
 
     static void createBundles(SQLiteDatabase db) {
