@@ -156,7 +156,7 @@ public class QualityOfLifeTest {
         old.setVersion(4); old.close();
         store=new TaskStore(context); shifts=new ShiftRepository(context);
         assertEquals("Keep existing task",store.find(id).title);
-        assertEquals(0,store.find(id).snoozedUntil); assertEquals(8,store.getReadableDatabase().getVersion());
+        assertEquals(0,store.find(id).snoozedUntil); assertEquals(9,store.getReadableDatabase().getVersion());
         assertTrue(store.saveFavorite(id)>0);
     }
 }
