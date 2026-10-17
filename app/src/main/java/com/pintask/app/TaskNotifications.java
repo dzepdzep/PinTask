@@ -165,7 +165,6 @@ public final class TaskNotifications {
                 .setContentText(detail)
                 .setCustomContentView(compactTask(context, task, false))
                 .setStyle(new Notification.DecoratedCustomViewStyle())
-                .setSubText("PinTask · Tap Done to clear")
                 .setCategory(channel.equals(REMINDER_CHANNEL) ? Notification.CATEGORY_ALARM : Notification.CATEGORY_REMINDER)
                 .setContentIntent(open(context,task.id))
                 .setDeleteIntent(dismissed)
@@ -175,7 +174,6 @@ public final class TaskNotifications {
                 .setOnlyAlertOnce(true)
                 .setShowWhen(true)
                 .setWhen(task.createdAt)
-                .addAction(done).addAction(snoozeAction(context, task.id))
                 .extend(watchActions(done)).build();
         // Android 14+ permits individual dismissal despite these flags.
         if(!watch)notification.flags |= Notification.FLAG_NO_CLEAR;
@@ -197,7 +195,6 @@ public final class TaskNotifications {
                 .setCategory(Notification.CATEGORY_ALARM)
                 .setAutoCancel(true)
                 .setLocalOnly(!watchEnabled(context))
-                .addAction(done).addAction(snoozeAction(context, task.id))
                 .extend(watchActions(done)).build();
         context.getSystemService(NotificationManager.class)
                 .notify(REMINDER_OFFSET + (int) task.id, notification);
