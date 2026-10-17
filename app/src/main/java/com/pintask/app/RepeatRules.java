@@ -26,7 +26,7 @@ final class RepeatRules {
     static String label(int code) {
         if(!valid(code))return "Unknown repeat";
         if(code<LABELS.length)return LABELS[code];
-        if(code>=5000)return "Every "+amount(code)+" "+(amount(code)==1?"hour":"hours");
+        if(code>=5000)return amount(code)==1?"Every hour":"Every "+amount(code)+" hours";
         if(code>=4000) {StringBuilder text=new StringBuilder();String[] days={"Mon","Tue","Wed","Thu","Fri","Sat","Sun"};for(int i=0;i<7;i++)if(((code-4000)&(1<<i))!=0){if(text.length()>0)text.append(" / ");text.append(days[i]);}return text.toString();}
         String unit=code>=3000?"month":code>=2000?"week":"day";
         return "Every "+amount(code)+" "+unit+(amount(code)==1?"":"s");
