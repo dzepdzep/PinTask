@@ -140,7 +140,8 @@ public class QualityOfLifeTest {
         new TaskActionReceiver().onReceive(context,new Intent(TaskNotifications.ACTION_UNDO).putExtra(TaskNotifications.EXTRA_ID,task.id));
         assertFalse(store.find(task.id).done);
         Notification notification=Shadows.shadowOf(context.getSystemService(NotificationManager.class)).getNotification((int)task.id);
-        assertEquals("Snooze",notification.actions[1].title.toString());
+        assertNotNull(notification.contentView);
+        assertTrue(notification.actions==null || notification.actions.length==0);
     }
 
     @Test public void versionFourDatabaseUpgradesWithoutLosingTasks() {
