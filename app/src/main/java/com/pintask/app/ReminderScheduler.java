@@ -88,6 +88,10 @@ public final class ReminderScheduler {
                         // Old behavior for tasks configured to appear immediately.
                         TaskNotifications.showDue(context, task);
                     }
+                    // Only new opt-in routines auto-create their next independent occurrence.
+                    // This must happen after successful notification posting.
+                    TaskStore.Task following=store.createNextRoutineOccurrence(id);
+                    if(following!=null) schedule(context,following);
                 } catch (RuntimeException failure) {
                     store.getWritableDatabase().execSQL("UPDATE tasks SET reminded_at=0 WHERE _id=? AND done=0", new Object[]{id});
                     android.util.Log.w("PinTask", "Reminder posting failed for task " + id, failure);
