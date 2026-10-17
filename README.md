@@ -1,4 +1,15 @@
-# PinTask 3.3 — Stopwatch-style delay selector (HH:MM:SS)
+# PinTask 3.4 — Readable notifications and regular tasks
+
+- **Legible notification text on ColorOS:** The compact notification layout now uses a deliberately dark surface with white, bold task names. Each task continues to have its own notification. App subtext was removed to avoid the repeated "PinTask · PinTask" header.
+- **One set of actions, not two:** Keep the compact **Snooze** and **✓ Done** buttons that are already directly visible on this phone, but remove their duplicate native phone notification action row. The Wear OS Done action is still provided via the WearableExtender. The notification title remains in standard fields for other Android surfaces and accessibility.
+- **Regular task directly on the Tasks home screen:** Choose **Regular task · Daily / hourly** underneath Quick Add. Create a daily reminder at the same clock time, several independent daily reminders at different clock times, or a recurring hourly/2-hour/3-hour/4-hour/custom 1–24-hour schedule. Pick daily times using the Android clock dialog, not manual HH:mm typing.
+- **Reliable opt-in routines:** New regular tasks have an alarm at their due time and create the next occurrence when an alert is successfully delivered, even if you have not pressed Done on the previous one. Completed occurrences remain in history, and repeating does not create duplicate occurrences if Done or alarm handling happens twice. **Old repeating tasks retain their previous Done-to-generate-next behavior.**
+- **Stop a routine:** The task’s ⋮ menu provides **Stop this routine…**, which cancels its future unalerted items without removing other routines or completed history. Individual Done/Snooze controls still target only their own task.
+- **Backups and updates:** Automatic routine metadata is stored in a backward-compatible SQLite v9 migration, and backups restore old task records without the new fields. Existing tasks and shifts are retained.
+- **Safety:** These are ordinary Android notifications with alarm sound. Delivery still depends on exact-alarm access, enabled notification channel, alarm volume and OS/OEM restrictions. Use a separate approved alarm for critical care tasks.
+- **Verification:** Automated tests cover independent notification cards, daily multi-time planning, exact hourly recurrence, no duplicated next on Done, stop-routine isolation and older backup restoration. Physical ColorOS screen/locked-phone testing remains needed.
+
+## PinTask 3.3 — Stopwatch-style delay selector (HH:MM:SS)
 
 - **Custom delay uses a visual stopwatch instead of typing text:** Open Tasks → When → Custom delay, or choose a relative delay in the Tasks/Work editor. The custom dialog now displays three independently scrollable numeric wheels labeled **HOURS · MINUTES · SECONDS** with a live **HH:MM:SS** readout. No keyboard or free-text entry is required.
 - **Choose any duration from 1 second to 30 days**, with whole-second accuracy. Examples: 01:30:00 means 90 minutes, 02:00:00 means two hours, and 00:05:15 means 5 minutes and 15 seconds. An all-zero duration or a value over 30 days is rejected rather than silently scheduling an immediate task.
@@ -126,7 +137,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 3.3
+## Build and install 3.4
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 

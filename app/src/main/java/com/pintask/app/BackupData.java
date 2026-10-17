@@ -64,6 +64,8 @@ final class BackupData {
                 if(table.equals("tasks")) {
                     if(!row.has("notes"))row.put("notes","");if(!row.has("checklist"))row.put("checklist","[]");
                     if(!row.has("paused"))row.put("paused",0);if(!row.has("repeat_after"))row.put("repeat_after",0);if(!row.has("repeat_anchor"))row.put("repeat_anchor",0);
+                    if(!row.has("auto_repeat"))row.put("auto_repeat",0);
+                    if(!row.has("routine_root"))row.put("routine_root",0);
                 }
                 if(row.length()!=columns.size()) throw new IllegalArgumentException("Unexpected fields in "+table);
                 ContentValues values=new ContentValues();
@@ -87,12 +89,16 @@ final class BackupData {
                 if(values.getAsLong("_id")<=0 || values.getAsLong("_id")>=999_999_999) throw new IllegalArgumentException("Invalid record ID");
                 if(table.equals("tasks") || table.equals("shift_steps"))TaskDetails.validate(values.getAsString("checklist"));
                 if(table.equals("bundles")){TaskBundles.validate(values.getAsString("payload"));if(values.getAsString("name").length()>80)throw new IllegalArgumentException("Bundle name is too long");}
-                range(values,"paused",0,1);range(values,"repeat_after",0,1);
+                range(values,"paused",0,1);range(values,"repeat_after",0,1);range(values,"auto_repeat",0,1);
                 range(values,"priority",0,2); range(values,"done",0,2); if(values.containsKey("recurrence") && (values.getAsLong("recurrence")>Integer.MAX_VALUE || !RepeatRules.valid(values.getAsInteger("recurrence")))) throw new IllegalArgumentException("Invalid recurrence");
                 range(values,"day_label",0,1);range(values,"ended",0,1); range(values,"start_min",0,1439); range(values,"duration_min",1,1440);
                 range(values,"first_min",-1,1439);
                 allowed(values,"every_min",new long[]{0,30,60,120,180,240});
                 allowed(values,"notify_before_min",new long[]{-2,-1,0,5,10,15,30,60});
+                if(table.equals("tasks") && values.getAsLong("auto_repeat")==1 &&
+                        (values.getAsLong("routine_root")<=0 || values.getAsLong("recurrence")==0 ||
+                         values.getAsLong("shift_run_id")>0))
+                    throw new IllegalArgumentException("Invalid automatic routine in backup");
                 if(table.equals("tasks") && values.getAsLong("recurrence")>0 && values.getAsLong("due_at")==0)
                     throw new IllegalArgumentException("Repeating task needs a time");
                 if(table.equals("shift_steps") && values.getAsLong("first_min")==-1 && values.getAsLong("every_min")!=0)

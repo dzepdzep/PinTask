@@ -62,7 +62,7 @@ public class ShiftFlowTest {
         android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();
         db.execSQL("CREATE TABLE old_runs AS SELECT _id,template_id,label,started_at,ends_at,ended,task_group FROM shift_runs");db.execSQL("DROP TABLE shift_runs");db.execSQL("ALTER TABLE old_runs RENAME TO shift_runs");db.execSQL("UPDATE shift_runs SET label='U8'");
         db.execSQL("CREATE TABLE old_steps AS SELECT _id,template_id,title,first_min,every_min,priority,notify_before_min FROM shift_steps");db.execSQL("DROP TABLE shift_steps");db.execSQL("ALTER TABLE old_steps RENAME TO shift_steps");db.setVersion(7);shifts.close();store.close();store=new TaskStore(context);shifts=new ShiftRepository(context);
-        assertEquals(8,store.getReadableDatabase().getVersion());assertFalse(shifts.findRun(run.id).dayLabel);assertEquals("Keep",shifts.runTasks(run.id).get(0).title);assertEquals("",shifts.steps(template.id).get(0).notes);
+        assertEquals(9,store.getReadableDatabase().getVersion());assertFalse(shifts.findRun(run.id).dayLabel);assertEquals("Keep",shifts.runTasks(run.id).get(0).title);assertEquals("",shifts.steps(template.id).get(0).notes);
     }
     @Test public void dateIsVisibleAndEditableBesideTimeWithoutMoreOptions(){
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){

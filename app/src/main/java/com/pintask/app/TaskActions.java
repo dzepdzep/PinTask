@@ -32,9 +32,26 @@ final class TaskActions {
             item(menu, "Change / remove time…", () -> TaskTimingEditor.open(activity, task, refresh));
             if (task.shiftRunId == 0) {
                 item(menu, "Change repeat…", () -> recurrence(activity, task, refresh, false));
-                if(task.recurrence!=0) item(menu,"Skip this occurrence",()->new AlertDialog.Builder(activity).setTitle("Skip this occurrence?").setMessage("Moves to the next scheduled date without marking this task Done.").setNegativeButton("Cancel",null).setPositiveButton("Skip",(d,w)->change(activity,refresh,store->store.skipOccurrence(task.id))).show());
-                if (task.recurrence != 0) item(menu, "Stop repeating", () -> change(activity, refresh, store -> {
-                    store.stopRepeating(task.id); return store.find(task.id);
+                if(task.recurrence!=0 && !task.autoRepeat) item(menu,"Skip this occurrence",()->new AlertDialog.Builder(activity).setTitle("Skip this occurrence?").setMessage("Moves to the next scheduled date without marking this task Done.").setNegativeButton("Cancel",null).setPositiveButton("Skip",(d,w)->change(activity,refresh,store->store.skipOccurrence(task.id))).show());
+                if(task.autoRepeat) item(menu,"Stop this routine…",()->new AlertDialog.Builder(activity)
+                        .setTitle("Stop this regular task?")
+                        .setMessage("Cancels its future reminders but leaves completed history and the current task. Other routines stay unchanged.")
+                        .setNegativeButton("Keep",null).setPositiveButton("Stop routine",(d,w)->{
+                            try(TaskStore store=new TaskStore(activity)){
+                                java.util.List<Long> canceled=store.stopAutomaticRoutine(task.id);
+                                for(long future:canceled){
+                                    ReminderScheduler.cancel(activity,future);
+                                    TaskNotifications.cancel(activity,future);
+                                }
+                                ReminderScheduler.cancel(activity,task.id);
+                                ReminderScheduler.schedule(activity,store.find(task.id));
+                                refresh.run();
+                            }catch(IllegalArgumentException problem){
+                                Toast.makeText(activity,problem.getMessage(),Toast.LENGTH_LONG).show();
+                            }
+                        }).show());
+                else if(task.recurrence!=0) item(menu,"Stop repeating",()->change(activity,refresh,store->{
+                    store.stopRepeating(task.id);return store.find(task.id);
                 }));
             }
             item(menu, "Snooze…", () -> activity.startActivity(new android.content.Intent(activity,SnoozeActivity.class)
@@ -70,7 +87,7 @@ final class TaskActions {
             item(menu,"Move to tomorrow",()->TaskExtras.tomorrow(activity,task,refresh));
             if(task.recurrence>0) {
                 item(menu,task.paused?"Resume recurring task":"Pause recurring task",()->change(activity,refresh,store->store.pause(task.id,!task.paused)));
-                item(menu,"Repeat timing…",()->new AlertDialog.Builder(activity).setTitle("How should repeating work?").setSingleChoiceItems(new String[]{"Keep the scheduled pattern","Count interval after completion"},task.repeatAfter?1:0,(d,index)->{change(activity,refresh,store->{TaskStore.Task latest=store.find(task.id);return store.saveDetails(task.id,latest.notes,latest.checklist,index==1);});d.dismiss();}).setNegativeButton("Cancel",null).show());
+                if(!task.autoRepeat)item(menu,"Repeat timing…",()->new AlertDialog.Builder(activity).setTitle("How should repeating work?").setSingleChoiceItems(new String[]{"Keep the scheduled pattern","Count interval after completion"},task.repeatAfter?1:0,(d,index)->{change(activity,refresh,store->{TaskStore.Task latest=store.find(task.id);return store.saveDetails(task.id,latest.notes,latest.checklist,index==1);});d.dismiss();}).setNegativeButton("Cancel",null).show());
             }
         }
         item(menu,task.shiftRunId>0?"Move shift and its tasks to group…":"Move to job / patient / group…",()->TaskGroups.move(activity,task,refresh));

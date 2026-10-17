@@ -140,7 +140,8 @@ public class QualityOfLifeTest {
         new TaskActionReceiver().onReceive(context,new Intent(TaskNotifications.ACTION_UNDO).putExtra(TaskNotifications.EXTRA_ID,task.id));
         assertFalse(store.find(task.id).done);
         Notification notification=Shadows.shadowOf(context.getSystemService(NotificationManager.class)).getNotification((int)task.id);
-        assertEquals("Snooze",notification.actions[1].title.toString());
+        assertNotNull(notification.contentView);
+        assertTrue(notification.actions==null || notification.actions.length==0);
     }
 
     @Test public void versionFourDatabaseUpgradesWithoutLosingTasks() {
@@ -155,7 +156,7 @@ public class QualityOfLifeTest {
         old.setVersion(4); old.close();
         store=new TaskStore(context); shifts=new ShiftRepository(context);
         assertEquals("Keep existing task",store.find(id).title);
-        assertEquals(0,store.find(id).snoozedUntil); assertEquals(8,store.getReadableDatabase().getVersion());
+        assertEquals(0,store.find(id).snoozedUntil); assertEquals(9,store.getReadableDatabase().getVersion());
         assertTrue(store.saveFavorite(id)>0);
     }
 }
