@@ -42,7 +42,7 @@ final class RepeatRules {
         int position=spinner.getSelectedItemPosition();
         return position<LABELS.length?position:(Integer)spinner.getTag();
     }
-    static int days(int code) {return code==10?31:code==11?96:code==12?21:code>=4000?code-4000:0;}
+    static int days(int code) {return code==10?31:code==11?96:code==12?21:code>=4000 && code<5000?code-4000:0;}
     static long next(long base,int code,long now) {
         if(!valid(code) || code==0)throw new IllegalArgumentException("Choose a repeat interval");
         Calendar calendar=Calendar.getInstance();calendar.setTimeInMillis(base);
