@@ -112,8 +112,10 @@ public class WatchNotificationsTest {
         TaskStore.Task first=store.add("Finished");
         TaskNotifications.show(context,first);
         store.complete(first.id);
+        manager.cancel((int)first.id);
         TaskNotifications.restoreDismissed(context,first.id,false);
-        assertFalse(store.find(first.id).done==false);
+        assertTrue(store.find(first.id).done);
+        assertNull(notification((int)first.id));
         TaskStore.Task second=store.add("Snoozed");
         store.snooze(second.id,System.currentTimeMillis()+300000);
         TaskNotifications.restoreDismissed(context,second.id,false);
