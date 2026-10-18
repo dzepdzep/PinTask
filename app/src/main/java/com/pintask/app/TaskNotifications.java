@@ -167,8 +167,9 @@ public final class TaskNotifications {
         if (task.dueAt > 0) detail += "  ·  Due " + DateFormat.getDateTimeInstance(
                 DateFormat.SHORT, DateFormat.SHORT).format(new Date(task.dueAt));
         // Use the reminder channel for scheduled arrivals, so the first notification alerts.
-        String channel = task.snoozedUntil > 0 || (task.notifyBeforeMinutes >= 0 && task.dueAt > 0)
-                ? REMINDER_CHANNEL : CHANNEL;
+        String channel = silent ? CHANNEL :
+                (task.snoozedUntil > 0 || (task.notifyBeforeMinutes >= 0 && task.dueAt > 0)
+                ? REMINDER_CHANNEL : CHANNEL);
         boolean watch=watchEnabled(context);
         Notification.Action done=doneAction(context,task.id);
         Notification notification = new Notification.Builder(context, channel)
@@ -183,7 +184,6 @@ public final class TaskNotifications {
                 .setAutoCancel(false)
                 .setOngoing(true)
                 .setLocalOnly(!watch)
-                .setSilent(silent)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(true)
                 .setWhen(task.createdAt)
@@ -202,7 +202,7 @@ public final class TaskNotifications {
         if(task.snoozedUntil>System.currentTimeMillis())return;
         ensureChannel(context);
         Notification.Action done=doneAction(context,task.id);
-        Notification notification = new Notification.Builder(context, REMINDER_CHANNEL)
+        Notification notification = new Notification.Builder(context, silent?CHANNEL:REMINDER_CHANNEL)
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle("Due now: " + task.title)
                 .setContentText("Your scheduled PinTask reminder")
@@ -214,7 +214,6 @@ public final class TaskNotifications {
                 .setCategory(Notification.CATEGORY_ALARM)
                 .setAutoCancel(false)
                 .setOngoing(true)
-                .setSilent(silent)
                 .setLocalOnly(!watchEnabled(context))
                 .extend(watchActions(done)).build();
         notification.flags |= Notification.FLAG_NO_CLEAR;
