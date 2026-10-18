@@ -29,6 +29,7 @@ public final class TaskNotifications {
     public static final String ACTION_REMINDER = "com.pintask.app.ACTION_REMINDER";
     public static final String ACTION_QUICK_ADD = "com.pintask.app.ACTION_QUICK_ADD";
     public static final String EXTRA_ID = "task_id";
+    static final String EXTRA_DISMISSED_DUE = "dismissed_due";
     public static final String REMOTE_TEXT = "quick_task_text";
     private static final int QUICK_ID = 1999999999;
     private static final int REMINDER_OFFSET = 1000000000;
@@ -113,8 +114,19 @@ public final class TaskNotifications {
             if(active.getTag()==null && active.getId()>=REMINDER_OFFSET && active.getId()<QUICK_ID)dueIds.add(active.getId());
         syncAll(context);
         try(TaskStore store=new TaskStore(context)) {
-            for(TaskStore.Task task:store.activeAll())if(dueIds.contains(REMINDER_OFFSET+(int)task.id) && task.reminderEnabled())showDue(context,task);
+            for(TaskStore.Task task:store.activeAll())if(dueIds.contains(REMINDER_OFFSET+(int)task.id) && task.reminderEnabled())showDueInternal(context,task,true);
         }
+    }
+
+    /** Distinct delete callbacks for the main card and the legacy due card. */
+    static PendingIntent dismissIntent(Context context, long id, boolean dueCard) {
+        Intent intent=new Intent(context,TaskActionReceiver.class)
+                .setAction(ACTION_DISMISSED)
+                .putExtra(EXTRA_ID,id)
+                .putExtra(EXTRA_DISMISSED_DUE,dueCard);
+        return PendingIntent.getBroadcast(context,
+                dueCard?REMINDER_OFFSET+(int)id:(int)id,intent,
+                PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
 
     private static Notification.WearableExtender watchActions(Notification.Action action) {
@@ -138,6 +150,11 @@ public final class TaskNotifications {
     }
 
     public static void show(Context context, TaskStore.Task task) {
+        showInternal(context,task,false);
+    }
+
+    /** Reposting a swiped card must never replay the alarm ringtone. */
+    private static void showInternal(Context context,TaskStore.Task task,boolean silent) {
         TaskWidget.refreshAll(context);
         if (task == null || task.done || !task.reminderEnabled() || !canNotify(context)) return;
         if (task.snoozedUntil > System.currentTimeMillis()) return;
@@ -146,11 +163,6 @@ public final class TaskNotifications {
         if (task.dueAt > 0 && task.notifyBeforeMinutes >= 0 &&
                 System.currentTimeMillis() < task.notificationAt()) return;
         ensureChannel(context);
-        Intent intent = new Intent(context, TaskActionReceiver.class);
-        intent.setAction(ACTION_DISMISSED);
-        intent.putExtra(EXTRA_ID, task.id);
-        PendingIntent dismissed = PendingIntent.getBroadcast(context, (int) task.id, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         String detail = (task.shiftRunId > 0 ? "Shift · " + task.shiftLabel + "  ·  " : "") + priorityText(task.priority);
         if (task.dueAt > 0) detail += "  ·  Due " + DateFormat.getDateTimeInstance(
                 DateFormat.SHORT, DateFormat.SHORT).format(new Date(task.dueAt));
@@ -167,21 +179,27 @@ public final class TaskNotifications {
                 .setStyle(new Notification.DecoratedCustomViewStyle())
                 .setCategory(channel.equals(REMINDER_CHANNEL) ? Notification.CATEGORY_ALARM : Notification.CATEGORY_REMINDER)
                 .setContentIntent(open(context,task.id))
-                .setDeleteIntent(dismissed)
+                .setDeleteIntent(dismissIntent(context,task.id,false))
                 .setAutoCancel(false)
-                .setOngoing(!watch)
+                .setOngoing(true)
                 .setLocalOnly(!watch)
+                .setSilent(silent)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(true)
                 .setWhen(task.createdAt)
                 .extend(watchActions(done)).build();
         // Android 14+ permits individual dismissal despite these flags.
-        if(!watch)notification.flags |= Notification.FLAG_NO_CLEAR;
+        notification.flags |= Notification.FLAG_NO_CLEAR;
         context.getSystemService(NotificationManager.class).notify((int) task.id, notification);
     }
 
     public static void showDue(Context context, TaskStore.Task task) {
-        if (!canNotify(context)) return;
+        showDueInternal(context,task,false);
+    }
+
+    private static void showDueInternal(Context context,TaskStore.Task task,boolean silent) {
+        if(task==null||task.done||!task.reminderEnabled()||!canNotify(context))return;
+        if(task.snoozedUntil>System.currentTimeMillis())return;
         ensureChannel(context);
         Notification.Action done=doneAction(context,task.id);
         Notification notification = new Notification.Builder(context, REMINDER_CHANNEL)
@@ -192,12 +210,34 @@ public final class TaskNotifications {
                 .setStyle(new Notification.DecoratedCustomViewStyle())
                 .setOnlyAlertOnce(true)
                 .setContentIntent(open(context,task.id))
+                .setDeleteIntent(dismissIntent(context,task.id,true))
                 .setCategory(Notification.CATEGORY_ALARM)
-                .setAutoCancel(true)
+                .setAutoCancel(false)
+                .setOngoing(true)
+                .setSilent(silent)
                 .setLocalOnly(!watchEnabled(context))
                 .extend(watchActions(done)).build();
+        notification.flags |= Notification.FLAG_NO_CLEAR;
         context.getSystemService(NotificationManager.class)
                 .notify(REMINDER_OFFSET + (int) task.id, notification);
+    }
+
+    /**
+     * Best effort recovery when Android 14+ or the phone manufacturer allows swiping
+     * an ongoing card away. Never revive completed, paused, silent or snoozed tasks.
+     * No new reminder is claimed; an already-delivered alarm stays delivered.
+     */
+    static void restoreDismissed(Context context,long id,boolean dueCard) {
+        if(!canNotify(context))return;
+        try(TaskStore store=new TaskStore(context)) {
+            TaskStore.Task task=store.find(id);
+            if(task==null||task.done||!task.reminderEnabled()||
+                    task.snoozedUntil>System.currentTimeMillis())return;
+            if(task.dueAt>0 && task.notifyBeforeMinutes>=0 &&
+                    task.notificationAt()>System.currentTimeMillis())return;
+            if(dueCard)showDueInternal(context,task,true);
+            else showInternal(context,task,true);
+        }
     }
 
     public static void showUndo(Context context,long id) {
