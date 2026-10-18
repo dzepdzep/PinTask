@@ -50,19 +50,21 @@ public final class TaskActionReceiver extends BroadcastReceiver {
                 TaskNotifications.show(context,store.find(id)); ReminderScheduler.schedule(context,store.find(id));
             } catch(IllegalArgumentException e) { android.widget.Toast.makeText(context,e.getMessage(),android.widget.Toast.LENGTH_LONG).show(); }
         } else if (TaskNotifications.ACTION_DISMISSED.equals(action)) {
-            // A swipe on either device dismisses a watch-compatible card, never completes its task.
-            if(TaskNotifications.watchEnabled(context))return;
-            // Best effort only: OS or OEM battery management can prevent re-posting.
-            PendingResult pending = goAsync();
-            Context app = context.getApplicationContext();
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                try (TaskStore store = new TaskStore(app)) {
-                    TaskStore.Task task = store.find(id);
-                    if (task != null && !task.done) TaskNotifications.show(app, task);
+            // Ongoing flags are advisory on Android 14+; reinstate an unfinished
+            // task after an individual swipe in both Phone+watch and Phone-only modes.
+            // Programmatic cancellation after Done or Snooze does not invoke deleteIntent.
+            final boolean dueCard=intent.getBooleanExtra(TaskNotifications.EXTRA_DISMISSED_DUE,false);
+            PendingResult pending=goAsync();
+            Context app=context.getApplicationContext();
+            new Handler(Looper.getMainLooper()).postDelayed(()->{
+                try {
+                    TaskNotifications.restoreDismissed(app,id,dueCard);
+                } catch(RuntimeException failure) {
+                    android.util.Log.w("PinTask","Unable to restore dismissed task "+id,failure);
                 } finally {
-                    pending.finish();
+                    if(pending!=null)pending.finish();
                 }
-            }, 1300);
+            },850);
         }
     }
 }
