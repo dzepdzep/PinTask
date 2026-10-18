@@ -80,6 +80,7 @@ public class WatchNotificationsTest {
         assertFalse(store.find(task.id).done);
         Notification restored=notification((int)task.id);
         assertNotNull(restored);
+        assertEquals(TaskNotifications.CHANNEL,restored.getChannelId());
         assertTrue((restored.flags&Notification.FLAG_ONGOING_EVENT)!=0);
         assertEquals("Keep me until Done",restored.extras.getCharSequence(Notification.EXTRA_TITLE));
     }
@@ -93,6 +94,8 @@ public class WatchNotificationsTest {
         send(sent.deleteIntent);
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(2));
         assertNotNull(notification(notificationId));
+        assertEquals("Swipe recovery must not ring a second timed alarm",
+                TaskNotifications.CHANNEL,notification(notificationId).getChannelId());
         assertFalse(store.find(task.id).done);
         assertEquals(1,manager.getActiveNotifications().length);
     }
