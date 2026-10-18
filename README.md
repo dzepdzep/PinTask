@@ -1,4 +1,12 @@
-# PinTask 3.4 — Readable notifications and regular tasks
+# PinTask 3.5 — Persistent unfinished-task notifications
+
+- **Pinned until Done (as far as Android permits):** Every incomplete task card, including timed alarm notifications, now uses `setOngoing(true)`, `FLAG_NO_CLEAR`, and `setAutoCancel(false)` whether **Phone + watch** or **Phone only** is selected. The old Phone + watch default accidentally disabled persistence. Each task still gets its own independent notification and actionable Snooze / ✓ Done buttons.
+- **Accidental swipe recovery:** Android 14+ explicitly allows people to swipe away most ongoing notifications on unlocked phones. PinTask now attaches a unique dismissal receiver to both normal and legacy due cards and attempts a **silent** re-post after an individual dismissal, without marking a task Done or replaying the alarm ringtone. Recovery never resurrects a completed, paused, silent, not-yet-due or currently snoozed task. Android / ColorOS may still suppress or delay the callback, so absolute non-dismissability cannot be guaranteed.
+- **Clear all protection:** The ongoing and no-clear flags provide system-supported protection against Clear all, where supported.
+- **Preserve existing behavior:** No changes to task storage, shift plans, repeat intervals, notification text/buttons, startup permission checks, or backups. Done cancels the matching card; Snooze intentionally hides it until its next alert. Watch Done remains available; phone/wear mirroring still depends on Android.
+- **Tests:** Check flag combinations for both phone modes, due-card persistence, idempotent per-task swipe recovery, two independent task cards, and no revival after Done or Snooze. Automated tests cannot simulate ColorOS notification-swipe restrictions.
+
+## PinTask 3.4 — Readable notifications and regular tasks
 
 - **Legible notification text on ColorOS:** The compact notification layout now uses a deliberately dark surface with white, bold task names. Each task continues to have its own notification. App subtext was removed to avoid the repeated "PinTask · PinTask" header.
 - **One set of actions, not two:** Keep the compact **Snooze** and **✓ Done** buttons that are already directly visible on this phone, but remove their duplicate native phone notification action row. The Wear OS Done action is still provided via the WearableExtender. The notification title remains in standard fields for other Android surfaces and accessibility.
@@ -137,7 +145,7 @@ Database v8 adds an explicit day-label flag and optional template notes/checklis
 - **Quick undo:** a 10-second Undo button follows completion. Recurring-task undo removes the automatically created next occurrence only if it has not been changed. Notification/widget completions offer Undo through a temporary notification when notifications are permitted.
 - **Widget:** long-press the Android home screen, choose Widgets, then PinTask tasks. It displays up to five active personal tasks depending on size. Add opens a quick-entry dialog; Done completes tasks without opening the main app. Tap the heading for the full list.
 
-## Build and install 3.4
+## Build and install 3.5
 
 Each successful main-branch build automatically publishes a versioned GitHub Release containing **PinTask-VERSION.apk** and SHA256SUMS. You can also download the **PinTask-installable-apk** Actions artifact and install **app-release.apk**. The workflow requires PINTASK_KEYSTORE_BASE64 and PINTASK_KEYSTORE_PASSWORD secrets, already configured for this repository. Never commit signing keys or passwords. Local debug builds remain available with `gradle :app:assembleDebug`.
 
