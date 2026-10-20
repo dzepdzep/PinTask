@@ -135,6 +135,12 @@ public class SpokenTaskTest {
             View mic=findDescription(root,"Speak a task");
             assertNotNull(mic);
             mic.performClick();
+            AlertDialog languages=ShadowAlertDialog.getLatestAlertDialog();
+            assertNotNull(languages);
+            assertEquals(0,store.activeAll().size());
+            View english=findDescription(languages.getWindow().getDecorView(),"Speak in English");
+            assertNotNull(english);
+            english.performClick();
             Intent launched=Shadows.shadowOf(activity.get()).getNextStartedActivity();
             assertNotNull(launched);
             assertEquals(RecognizerIntent.ACTION_RECOGNIZE_SPEECH,launched.getAction());
