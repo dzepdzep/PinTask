@@ -14,12 +14,13 @@ final class SpokenTask {
     final String title;
     final long dueAt;
     final int repeatCode;
+    final int remindBeforeMinutes;
     final String original;
     final String schedule;
     final boolean isTimed;
 
-    private SpokenTask(String title,long dueAt,int repeatCode,String original,String schedule) {
-        this.title=title;this.dueAt=dueAt;this.repeatCode=repeatCode;this.original=original;
+    private SpokenTask(String title,long dueAt,int repeatCode,int remindBeforeMinutes,String original,String schedule) {
+        this.title=title;this.dueAt=dueAt;this.repeatCode=repeatCode;this.remindBeforeMinutes=remindBeforeMinutes;this.original=original;
         this.schedule=schedule;this.isTimed=dueAt>0;
     }
 
@@ -36,6 +37,9 @@ final class SpokenTask {
     private static final Pattern DELAY=Pattern.compile(
         "\\bin\\s+(\\d+(?:[.,]\\d+)?)\\s*(hours?|hrs?|h|minutes?|mins?|m)\\b",
         Pattern.CASE_INSENSITIVE);
+    private static final Pattern BEFORE=Pattern.compile(
+        "\\b(?:(\\d{1,4})\\s*(minutes?|mins?|m|hours?|hrs?|h)|half\\s+(?:an?\\s+)?hour)\\s+before\\b",
+        Pattern.CASE_INSENSITIVE);
     private static final Pattern LEAD=Pattern.compile(
         "^(?:please\\s+)?(?:remind\\s+me\\s+to|i\\s+need\\s+to|i\\s+have\\s+to|"+
         "remember\\s+to|add\\s+(?:a\\s+)?task\\s+to|create\\s+(?:a\\s+)?task\\s+to|"+
@@ -47,6 +51,22 @@ final class SpokenTask {
         String original=input.trim().replaceAll("\\s+"," ");
         String working=LEAD.matcher(original).replaceFirst("").trim();
         String lower=working.toLowerCase(Locale.ROOT);
+        int early=0;
+        Matcher before=BEFORE.matcher(lower);
+        if(before.find()){
+            String unit=before.group(2);
+            if(unit==null) early=30;
+            else {
+                int n=Integer.parseInt(before.group(1));
+                early=n*(unit.toLowerCase(Locale.ROOT).startsWith("h")?60:1);
+            }
+            if(early<1||early>1440)
+                throw new IllegalArgumentException("Choose 1 to 1440 minutes before the task.");
+            working=remove(working,before.start(),before.end());
+            lower=working.toLowerCase(Locale.ROOT);
+            if(BEFORE.matcher(lower).find())
+                throw new IllegalArgumentException("Choose only one advance reminder time.");
+        }
         Matcher rm=REPEAT.matcher(lower);
         int repeat=0;
         DayOfWeek weekday=null;
@@ -120,12 +140,14 @@ final class SpokenTask {
             throw new IllegalArgumentException("Use either a delay (‘in 30 minutes’) or a clock time, not both.");
         if(clock==null&&duration==null&&explicitDate)
             throw new IllegalArgumentException("Please add a time, such as ‘tomorrow at 13:00’.");
+        if(early>0&&clock==null&&duration==null&&repeat==0)
+            throw new IllegalArgumentException("Choose a task date/time before asking for an earlier alert.");
         if(repeat>0&&clock==null&&duration==null&&repeat<5000)
             throw new IllegalArgumentException("Please specify a time for your repeating reminder.");
         if(weekday!=null&&clock==null)
             throw new IllegalArgumentException("Please add a time, such as ‘every other Tuesday at 08:00’.");
         if(repeat>=5000&&clock==null&&duration==null)duration=Duration.ofHours(repeat-5000);
-        if(Pattern.compile("(?i)\\b(?:every|tomorrow|today|next\\s+\\w+|at\\s+\\d+|in\\s+\\d+)\\b").matcher(working).find())
+        if(Pattern.compile("(?i)\\b(?:every|tomorrow|today|next\\s+\\w+|at\\s+\\d+|in\\s+\\d+|before)\\b").matcher(working).find())
             throw new IllegalArgumentException("I couldn't understand the entire schedule. Please edit the command.");
         String title=working.replaceAll("(?i)\\b(?:on|for)\\s*$","")
                 .replaceAll("(?i)^\\s*(?:on|for)\\s+","").trim()
@@ -148,7 +170,9 @@ final class SpokenTask {
                 due.format(DateTimeFormatter.ofPattern("EEE dd MMM yyyy · HH:mm",Locale.ENGLISH))+
                 (repeat>0?" · "+RepeatRules.label(repeat):" · One time");
         if(due==null&&repeat>0)throw new IllegalArgumentException("A repeating task must have a schedule.");
-        return new SpokenTask(title,due==null?0:due.toInstant().toEpochMilli(),repeat,original,schedule);
+        if(due!=null&&early>0&&!due.toInstant().isAfter(at.toInstant().plusSeconds(early*60L)))
+            throw new IllegalArgumentException("That early reminder would already be in the past. Choose a later task time or a shorter advance.");
+        return new SpokenTask(title,due==null?0:due.toInstant().toEpochMilli(),repeat,early,original,schedule);
     }
 
     private static String remove(String value,int start,int end){
