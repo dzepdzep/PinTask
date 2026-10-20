@@ -87,6 +87,77 @@ public class VoiceTaskParserTest {
         assertEquals(15,d.minute);
     }
 
+    @Test public void pastDailyRepeatMovesToTomorrowButPastOneOffStaysPast(){
+        ZonedDateTime n=ZonedDateTime.of(2026,10,20,21,30,0,0,zone);
+        VoiceTaskParser.Draft daily=VoiceTaskParser.parse("Wash dishes every day at 13",n);
+        assertEquals(LocalDate.of(2026,10,21),daily.day);
+        assertEquals(TaskStore.REPEAT_DAILY,daily.recurrence);
+        VoiceTaskParser.Draft tuesday=VoiceTaskParser.parse("Bins every other Tuesday at 13",n);
+        assertEquals(LocalDate.of(2026,10,27),tuesday.day);
+        assertEquals(TaskStore.REPEAT_FORTNIGHTLY,tuesday.recurrence);
+        VoiceTaskParser.Draft oneOff=VoiceTaskParser.parse("Wash dishes today at 13",n);
+        assertEquals(LocalDate.of(2026,10,20),oneOff.day);
+    }
+
+    @Test public void mainTasksShowsAccessibleVoiceIconAndResultOpensEditableReview(){
+        Context ctx=RuntimeEnvironment.getApplication();
+        ctx.deleteDatabase("pintask.db");
+        ctx.getSharedPreferences("settings",0).edit()
+                .putBoolean("startup_access_reviewed_v31",true)
+                .putBoolean("interactive_shift_guide_v29",true).commit();
+        try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
+            ShiftActivity activity=controller.get();
+            assertNotNull(findDescription(activity.getWindow().getDecorView(),"Speak a task"));
+            Intent returned=new Intent();
+            returned.putStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS,
+                    new java.util.ArrayList<>(java.util.Arrays.asList("Wash dishes tomorrow at 13")));
+            activity.onActivityResult(407,Activity.RESULT_OK,returned);
+            AlertDialog review=ShadowAlertDialog.getLatestAlertDialog();
+            assertNotNull(findText(review.getWindow().getDecorView(),
+                    "Heard: Wash dishes tomorrow at 13"));
+            assertNotNull(findDescription(review.getWindow().getDecorView(),"Choose reminder date"));
+            assertNotNull(findDescription(review.getWindow().getDecorView(),"Choose reminder time"));
+            assertNotNull(findDescription(review.getWindow().getDecorView(),"Choose recurrence"));
+            try(TaskStore store=new TaskStore(activity)){assertEquals(0,store.activeAll().size());}
+        }
+    }
+
+    @Test public void confirmedVoiceTaskSchedulesExactlyOneTimedAlert(){
+        Context ctx=RuntimeEnvironment.getApplication();
+        ctx.deleteDatabase("pintask.db");
+        ctx.getSharedPreferences("settings",0).edit()
+                .putBoolean("startup_access_reviewed_v31",true)
+                .putBoolean("interactive_shift_guide_v29",true).commit();
+        try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
+            ShiftActivity activity=controller.get();
+            VoiceTaskParser.Draft draft=VoiceTaskParser.parse("Wash dishes tomorrow at 13",ZonedDateTime.now());
+            VoiceTaskReview.show(activity,draft,()->{});
+            AlertDialog review=ShadowAlertDialog.getLatestAlertDialog();
+            review.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            try(TaskStore store=new TaskStore(activity)){
+                assertEquals(1,store.activeAll().size());
+                TaskStore.Task task=store.activeAll().get(0);
+                assertEquals("Wash dishes",task.title);
+                assertEquals(0,task.notifyBeforeMinutes);
+                assertEquals(0,task.recurrence);
+                assertTrue(task.dueAt>System.currentTimeMillis());
+            }
+            assertEquals(1,Shadows.shadowOf(activity.getSystemService(AlarmManager.class))
+                    .getScheduledAlarms().size());
+        }
+    }
+
+    private static View findDescription(View root,String text){
+        if(text.contentEquals(root.getContentDescription()))return root;
+        if(root instanceof ViewGroup){
+            for(int i=0;i<((ViewGroup)root).getChildCount();i++){
+                View match=findDescription(((ViewGroup)root).getChildAt(i),text);
+                if(match!=null)return match;
+            }
+        }
+        return null;
+    }
+
     @Test public void voiceReviewNeverCreatesTaskBeforeConfirmation(){
         Context ctx=RuntimeEnvironment.getApplication();
         ctx.deleteDatabase("pintask.db");
