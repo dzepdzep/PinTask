@@ -47,6 +47,22 @@ public final class ShiftActivity extends Activity {
     @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}
         if(startupAccess!=null)startupAccess.onResume();}
     @Override protected void onDestroy(){if(tour!=null)tour.stop();repository.close();super.onDestroy();}
+    @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=VoiceTaskEntry.SPEECH_REQUEST||resultCode!=RESULT_OK||data==null)return;
+        ArrayList<String> words=data.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS);
+        if(words==null||words.isEmpty()||words.get(0).trim().isEmpty()){
+            toast("No speech recognized. Try again or type a command.");
+            return;
+        }
+        VoiceTaskEntry.review(this,words.get(0));
+    }
+    void voiceTaskSaved(boolean timed){
+        quickDraft="";
+        hideKeyboard();render();
+        if(timed)ReminderHealth.warnWhenBlocked(this);
+        toast("Voice task saved");
+    }
     private void routeIntent(Intent intent){
         detailRun=0;
         long id=intent.getLongExtra("open_task",0);
@@ -85,6 +101,12 @@ public final class ShiftActivity extends Activity {
         heading("Tasks","Your everyday to-do list");
         LinearLayout compose=card();LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);compose.addView(row);
         quickEntry=new EditText(this);quickEntry.setSingleLine(true);quickEntry.setText(quickDraft);quickEntry.setHint("What needs doing?");quickEntry.setTextColor(FG);quickEntry.setHintTextColor(MUTED);quickEntry.setTextSize(16);quickEntry.setBackgroundColor(Color.TRANSPARENT);quickEntry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)});row.addView(quickEntry,new LinearLayout.LayoutParams(0,dp(52),1));
+        Button microphone=button("🎤",false);
+        microphone.setContentDescription("Speak a task");
+        LinearLayout.LayoutParams micSpace=new LinearLayout.LayoutParams(dp(52),dp(48));
+        micSpace.rightMargin=dp(6);
+        row.addView(microphone,micSpace);
+        microphone.setOnClickListener(v->{remember();VoiceTaskEntry.start(this);});
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(78),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
         action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
