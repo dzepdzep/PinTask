@@ -219,6 +219,51 @@ public class SpokenTaskTest {
         }
     }
 
+    @Test public void voiceSpokenEarlyReminderPersistsRealAdvancedAlarm(){
+        try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
+            TaskStore store=new TaskStore(context)){
+            VoiceTaskDialog.editCommand(activity.get(),
+                    "Wash dishes tomorrow at 13:00 15 minutes before",()->{});
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            AlertDialog transcript=ShadowAlertDialog.getLatestAlertDialog();
+            transcript.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            AlertDialog review=ShadowAlertDialog.getLatestAlertDialog();
+            View early=findDescription(review.getWindow().getDecorView(),"Change advance reminder");
+            assertNotNull(early);
+            assertTrue(((android.widget.Button)early).getText().toString().contains("15 minutes before"));
+            assertEquals(0,store.activeAll().size());
+            review.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertEquals(1,store.activeAll().size());
+            TaskStore.Task persisted=store.activeAll().get(0);
+            assertEquals(15,persisted.notifyBeforeMinutes);
+            assertEquals(15*60_000L,persisted.dueAt-persisted.notificationAt());
+            assertEquals("Wash dishes",persisted.title);
+            assertEquals(0,persisted.recurrence);
+        }
+    }
+    @Test public void manualAdvancePresetOverridesWhatSpeechRecognitionHeard(){
+        try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
+            TaskStore store=new TaskStore(context)){
+            VoiceTaskDialog.editCommand(activity.get(),"Wash dishes tomorrow at 13:00",()->{});
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            ShadowAlertDialog.getLatestAlertDialog()
+                    .getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            AlertDialog review=ShadowAlertDialog.getLatestAlertDialog();
+            View early=findDescription(review.getWindow().getDecorView(),"Change advance reminder");
+            assertNotNull(early);
+            early.performClick();
+            AlertDialog options=ShadowAlertDialog.getLatestAlertDialog();
+            options.getListView().performItemClick(null,3,3); // 15 min before
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertTrue(((android.widget.Button)early).getText().toString().contains("15 minutes before"));
+            assertEquals(0,store.activeAll().size());
+            review.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertEquals(15,store.activeAll().get(0).notifyBeforeMinutes);
+        }
+    }
+
     private static View findDescription(View v,String desc) {
         if(desc.contentEquals(v.getContentDescription()==null?"":v.getContentDescription()))return v;
         if(v instanceof ViewGroup)for(int i=0;i<((ViewGroup)v).getChildCount();i++){
