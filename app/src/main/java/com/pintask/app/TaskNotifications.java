@@ -95,6 +95,20 @@ public final class TaskNotifications {
         return channel != null && channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
+    /**
+     * Posting is not the same as alerting. IMPORTANCE_LOW, a null sound or a
+     * user-silenced channel can produce a perfectly valid but silent notification.
+     * Do not report those channels as ready for audible timed reminders.
+     */
+    static boolean canAlertAudibly(Context context, String channelId) {
+        if (!canNotifyChannel(context, channelId)) return false;
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        NotificationChannel channel = manager == null ? null : manager.getNotificationChannel(channelId);
+        return channel != null &&
+                channel.getImportance() >= NotificationManager.IMPORTANCE_DEFAULT &&
+                channel.getSound() != null;
+    }
+
     private static PendingIntent open(Context context) {return open(context,0);}
     private static PendingIntent open(Context context,long id) {
         return PendingIntent.getActivity(context,2,TaskSections.openIntent(context,id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
@@ -337,7 +351,16 @@ public final class TaskNotifications {
         showQuickAdd(context);
         if (!canNotify(context)) return;
         try (TaskStore store = new TaskStore(context)) {
-            for (TaskStore.Task task : store.activeAll()) show(context, task);
+            for (TaskStore.Task task : store.activeAll()) {
+                // Do not pre-post an unclaimed due alarm. Its first notification
+                // must come from ReminderScheduler.deliver(), which records the
+                // delivery and starts the sound. Pre-posting here together with
+                // setOnlyAlertOnce(true) can make the actual alarm update silent.
+                if (task.remindedAt == 0 && task.dueAt > 0 &&
+                        task.notifyBeforeMinutes >= 0 &&
+                        task.notificationAt() <= System.currentTimeMillis()) continue;
+                show(context, task);
+            }
         }
     }
 
