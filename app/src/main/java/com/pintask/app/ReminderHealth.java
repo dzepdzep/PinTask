@@ -22,12 +22,13 @@ final class ReminderHealth {
         boolean exact=ReminderScheduler.canScheduleExact(a);
         AudioManager audio=a.getSystemService(AudioManager.class);
         int level=audio==null?-1:audio.getStreamVolume(AudioManager.STREAM_ALARM);
-        return "Notification permission: "+(notifications?"Allowed":"BLOCKED")+
+        return "Alarm-clock priority scheduling: "+(ReminderScheduler.alarmClockPriority(a)?"ON":"Off (regular exact/inexact)")+
+                "\nNotification permission: "+(notifications?"Allowed":"BLOCKED")+
                 "\nTimed alarm category: "+(channel?"Enabled":"BLOCKED")+
                 "\nAudible alarm channel: "+(audible?"Ready":"SILENT/LOW IMPORTANCE — check category sound")+
                 "\nExact alarm permission: "+(exact?"Enabled":"NOT ALLOWED — alerts can be late")+
                 "\nAlarm volume: "+(level<0?"Unknown":level==0?"MUTED":"Level "+level)+
-                "\n\nAndroid Do Not Disturb, silent modes and the phone maker's battery controls may still restrict sounds. " +
+                "\n\nIf alarm volume is muted, or the notification category was silenced, notifications may arrive without ringing. Android Do Not Disturb, silent modes and the phone maker's battery controls may still restrict sounds. " +
                 "This check cannot guarantee future delivery. Test with the screen locked.";
     }
 
