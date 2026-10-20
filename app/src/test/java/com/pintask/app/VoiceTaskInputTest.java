@@ -51,6 +51,7 @@ public class VoiceTaskInputTest {
         assertEquals(4,unspecified.recurrence);
         assertTrue(unspecified.scheduleMentioned);
         assertNull("Must never guess an unspoken clock time",unspecified.time);
+        assertEquals(LocalDate.of(2026,10,27),unspecified.date);
 
         VoiceTaskParser.Result seven=VoiceTaskParser.parse("Take out the bins every other Tuesday at 7",NOW);
         assertEquals(LocalDate.of(2026,10,27),seven.date); // 07:00 today has passed
@@ -90,9 +91,7 @@ public class VoiceTaskInputTest {
             VoiceTaskEntry.review(controller.get(),phrase);
             AlertDialog preview=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(preview);
-            assertEquals("Review your voice task",preview.getButton(AlertDialog.BUTTON_POSITIVE)==null?
-                    "Review your voice task":preview.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString().equals("Save task")?
-                    "Review your voice task":"Unexpected");
+            assertEquals("Save task",preview.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString());
             EditText title=firstEditText(preview.getWindow().getDecorView());
             assertNotNull(title);
             title.setText("Wash pots");
