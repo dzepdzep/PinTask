@@ -136,6 +136,11 @@ final class VoiceTaskParser {
             note="Some scheduling words were not understood. Choose the correct date, time and repeat in the review.";
         }
 
+        // With no spoken time on the current named weekday, suggest next week
+        // instead of a same-day clock time that could already have passed.
+        if(weekdayMentioned && time==null && day.equals(now.toLocalDate()) && !explicitDay)
+            day=day.plusWeeks(1);
+
         // For an ongoing schedule, the first alarm is the next matching date,
         // never a time already passed today. Explicit "today" is not changed.
         if(time!=null && !explicitDay && day.equals(now.toLocalDate()) &&
