@@ -111,12 +111,69 @@ public class SpokenTaskTest {
             assertEquals(0,store.activeAll().size());
             AlertDialog preview=ShadowAlertDialog.getLatestAlertDialog();
             assertNotSame(transcript,preview);
-            assertNotNull(findText(preview.getWindow().getDecorView(),"Confirm the date, time and repeat schedule before creating this task. If they're incorrect, choose Edit command."));
+            assertNotNull(findText(preview.getWindow().getDecorView(),"WHAT I HEARD"));
+            assertNotNull(findDescription(preview.getWindow().getDecorView(),"Change reminder date"));
+            assertNotNull(findDescription(preview.getWindow().getDecorView(),"Change reminder time"));
+            assertNotNull(findDescription(preview.getWindow().getDecorView(),"Change repeat pattern"));
             preview.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             assertEquals(1,store.activeAll().size());
             assertEquals("buy milk",store.activeAll().get(0).title);
         }
     }
+    @Test public void separatelyCorrectingTimeActuallyChangesSavedAlarmAndKeepsTranscribedTask(){
+        try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
+            TaskStore store=new TaskStore(context)){
+            VoiceTaskDialog.editCommand(activity.get(),"Wash dishes tomorrow at 13:00",()->{});
+            AlertDialog transcript=ShadowAlertDialog.getLatestAlertDialog();
+            transcript.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            AlertDialog review=ShadowAlertDialog.getLatestAlertDialog();
+            View time=findDescription(review.getWindow().getDecorView(),"Change reminder time");
+            assertNotNull(time);
+            assertTrue(((android.widget.Button)time).getText().toString().contains("13:00"));
+            time.performClick();
+            android.app.TimePickerDialog picker=
+                (android.app.TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
+            picker.updateTime(14,45);
+            picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertTrue(((android.widget.Button)time).getText().toString().contains("14:45"));
+            assertEquals(0,store.activeAll().size());
+            review.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertEquals(1,store.activeAll().size());
+            TaskStore.Task saved=store.activeAll().get(0);
+            java.time.LocalDate day=java.time.LocalDate.now().plusDays(1);
+            long expected=day.atTime(14,45).atZone(java.time.ZoneId.systemDefault())
+                    .toInstant().toEpochMilli();
+            assertEquals(expected,saved.dueAt);
+            assertEquals(0,saved.notifyBeforeMinutes);
+            assertEquals("Wash dishes",saved.title);
+        }
+    }
+    @Test public void independentRepeatPickerUpdatesPreviewButSavesOnlyOnConfirmation(){
+        try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
+            TaskStore store=new TaskStore(context)){
+            VoiceTaskDialog.editCommand(activity.get(),"Water flowers tomorrow at 18:00",()->{});
+            AlertDialog transcript=ShadowAlertDialog.getLatestAlertDialog();
+            transcript.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            AlertDialog review=ShadowAlertDialog.getLatestAlertDialog();
+            View repeat=findDescription(review.getWindow().getDecorView(),"Change repeat pattern");
+            assertNotNull(repeat);
+            repeat.performClick();
+            AlertDialog options=ShadowAlertDialog.getLatestAlertDialog();
+            options.getListView().performItemClick(null,2,2); // Every day
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertTrue(((android.widget.Button)repeat).getText().toString().contains("Daily"));
+            assertEquals(0,store.activeAll().size());
+            review.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertEquals(1,store.activeAll().size());
+            TaskStore.Task saved=store.activeAll().get(0);
+            assertEquals(TaskStore.REPEAT_DAILY,saved.recurrence);
+            assertTrue(saved.autoRepeat);
+        }
+    }
+
     private static View findDescription(View v,String desc) {
         if(desc.contentEquals(v.getContentDescription()==null?"":v.getContentDescription()))return v;
         if(v instanceof ViewGroup)for(int i=0;i<((ViewGroup)v).getChildCount();i++){
