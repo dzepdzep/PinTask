@@ -79,7 +79,7 @@ public final class ReminderScheduler {
             TaskStore.Task candidate = store.find(id);
             if (candidate == null) return;
             String channel = candidate.dueAt == 0 && candidate.snoozedUntil == 0
-                    ? TaskNotifications.CHANNEL : TaskNotifications.REMINDER_CHANNEL;
+                    ? TaskNotifications.CHANNEL : TaskNotifications.activeReminderChannel(context);
             if (!TaskNotifications.canNotifyChannel(context, channel)) return;
             TaskStore.Task task = store.claimDueReminder(id);
             if (task != null) {
