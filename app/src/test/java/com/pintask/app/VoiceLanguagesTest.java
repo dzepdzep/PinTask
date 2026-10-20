@@ -109,17 +109,21 @@ public class VoiceLanguagesTest {
     @Test public void languagePreferencePersistsAndRecognizerUsesSelectedLocale(){
         try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup()){
             assertEquals("en-US",VoiceLanguages.language(activity.get()));
-            View choice=findText(activity.get().getWindow().getDecorView(),"🎤 Voice language: English  ▾");
-            assertNotNull(choice);
-            choice.performClick();
-            AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
-            assertNotNull(dialog);
-            dialog.getListView().performItemClick(null,2,2);
-            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            assertEquals("hr-HR",VoiceLanguages.language(activity.get()));
             View microphone=findDescription(activity.get().getWindow().getDecorView(),"Speak a task");
             assertNotNull(microphone);
+            assertEquals("🎤 EN",((android.widget.Button)microphone).getText().toString());
             microphone.performClick();
+            AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
+            assertNotNull(dialog);
+            assertEquals("No recording before selecting a language",null,
+                    Shadows.shadowOf(activity.get()).getNextStartedActivity());
+            View croatian=findDescription(dialog.getWindow().getDecorView(),"Speak in Hrvatski");
+            assertNotNull(croatian);
+            croatian.performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertEquals("hr-HR",VoiceLanguages.language(activity.get()));
+            View newMicrophone=findDescription(activity.get().getWindow().getDecorView(),"Speak a task");
+            assertEquals("🎤 HR",((android.widget.Button)newMicrophone).getText().toString());
             Intent recognizer=Shadows.shadowOf(activity.get()).getNextStartedActivity();
             assertEquals(RecognizerIntent.ACTION_RECOGNIZE_SPEECH,recognizer.getAction());
             assertEquals("hr-HR",recognizer.getStringExtra(RecognizerIntent.EXTRA_LANGUAGE));
