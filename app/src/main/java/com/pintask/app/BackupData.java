@@ -94,7 +94,11 @@ final class BackupData {
                 range(values,"day_label",0,1);range(values,"ended",0,1); range(values,"start_min",0,1439); range(values,"duration_min",1,1440);
                 range(values,"first_min",-1,1439);
                 allowed(values,"every_min",new long[]{0,30,60,120,180,240});
-                allowed(values,"notify_before_min",new long[]{-2,-1,0,5,10,15,30,60});
+                if(values.containsKey("notify_before_min")){
+                    long before=values.getAsLong("notify_before_min");
+                    if(before!=TaskStore.REMINDER_OFF && before!=-1 && (before<0||before>1440))
+                        throw new IllegalArgumentException("Invalid advance reminder");
+                }
                 if(table.equals("tasks") && values.getAsLong("auto_repeat")==1 &&
                         (values.getAsLong("routine_root")<=0 || values.getAsLong("recurrence")==0 ||
                          values.getAsLong("shift_run_id")>0))
