@@ -82,7 +82,9 @@ public final class ReminderScheduler {
     static void deliverDue(Context context, String origin) {
         try (TaskStore store = new TaskStore(context)) {
             for (TaskStore.Task task : store.activeAll()) {
-                if (task.remindedAt == 0 && task.notificationAt() <= System.currentTimeMillis())
+                if (task.remindedAt == 0 && task.reminderEnabled() &&
+                        (task.dueAt > 0 || task.shiftRunId > 0 || task.snoozedUntil > 0) &&
+                        task.notificationAt() <= System.currentTimeMillis())
                     deliver(context, task.id, origin);
             }
         }
