@@ -88,27 +88,54 @@ public final class ShiftActivity extends Activity {
         heading("Tasks","Your everyday to-do list");
         LinearLayout compose=card();LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);compose.addView(row);
         quickEntry=new EditText(this);quickEntry.setSingleLine(true);quickEntry.setText(quickDraft);quickEntry.setHint("What needs doing?");quickEntry.setTextColor(FG);quickEntry.setHintTextColor(MUTED);quickEntry.setTextSize(16);quickEntry.setBackgroundColor(Color.TRANSPARENT);quickEntry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)});row.addView(quickEntry,new LinearLayout.LayoutParams(0,dp(52),1));
-        Button microphone=button("🎤",false);
+        Button microphone=button("🎤 "+VoiceLanguages.SHORT[VoiceLanguages.selection(this)],false);
         microphone.setContentDescription("Speak a task");
-        row.addView(microphone,new LinearLayout.LayoutParams(dp(54),dp(48)));
-        microphone.setOnClickListener(v->startVoiceTask());
+        row.addView(microphone,new LinearLayout.LayoutParams(dp(70),dp(48)));
+        microphone.setOnClickListener(v->chooseVoiceLanguage());
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
-        action("🎤 Voice language: "+VoiceLanguages.NAMES[VoiceLanguages.selection(this)]+"  ▾",()->chooseVoiceLanguage());
         action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.personal(store.activeAll());if(tasks.isEmpty())empty("A little space to breathe","Add your first task above.");else{section(tasks.size()+" to do");showTasks(tasks);}}
     }
+    /** One tap on the mic, then one tap on EN/DE/HR starts recording immediately. */
     private void chooseVoiceLanguage(){
-        new AlertDialog.Builder(this)
-                .setTitle("Voice recognition language")
-                .setSingleChoiceItems(VoiceLanguages.NAMES,VoiceLanguages.selection(this),(dialog,choice)->{
-                    VoiceLanguages.select(this,choice);
-                    dialog.dismiss();
-                    remember();render();
-                })
-                .setNegativeButton("Cancel",null).show();
+        int selected=VoiceLanguages.selection(this);
+        LinearLayout picker=new LinearLayout(this);
+        picker.setOrientation(LinearLayout.VERTICAL);
+        picker.setPadding(dp(12),dp(8),dp(12),dp(12));
+        TextView hint=new TextView(this);
+        hint.setText("Choose the language you're speaking. Listening starts right away.");
+        hint.setTextSize(14);
+        hint.setTextColor(FG);
+        hint.setPadding(dp(4),0,dp(4),dp(12));
+        picker.addView(hint);
+        LinearLayout choices=new LinearLayout(this);
+        choices.setOrientation(LinearLayout.HORIZONTAL);
+        picker.addView(choices);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("🎤 Speak a task")
+                .setView(picker)
+                .setNegativeButton("Cancel",null).create();
+        for(int i=0;i<VoiceLanguages.TAGS.length;i++){
+            final int language=i;
+            Button pick=button(VoiceLanguages.SHORT[i]+"\n"+VoiceLanguages.NAMES[i],i==selected);
+            pick.setAllCaps(false);
+            pick.setTextSize(13);
+            pick.setContentDescription("Speak in "+VoiceLanguages.NAMES[i]);
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(76),1);
+            params.setMargins(dp(2),0,dp(2),0);
+            choices.addView(pick,params);
+            pick.setOnClickListener(v->{
+                VoiceLanguages.select(this,language);
+                dialog.dismiss();
+                remember();
+                render();
+                startVoiceTask();
+            });
+        }
+        dialog.show();
     }
 
     private void startVoiceTask(){
