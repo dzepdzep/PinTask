@@ -127,7 +127,7 @@ public final class TaskStore extends SQLiteOpenHelper {
         return add(title, priority, dueAt, recurrence, -1);
     }
 
-    /** -1 = post immediately; 0/5/10/15/30/60 = post that many minutes before due. */
+    /** -1 = legacy immediate, -2 = off, 0 = at due time, 1-1440 = minutes before due. */
     public synchronized Task add(String title, int priority, long dueAt, int recurrence, int notifyBeforeMinutes) {
         String cleaned = title == null ? "" : title.trim();
         if (cleaned.isEmpty()) throw new IllegalArgumentException("Task title is required");
@@ -135,9 +135,8 @@ public final class TaskStore extends SQLiteOpenHelper {
         if (priority < PRIORITY_LOW || priority > PRIORITY_HIGH) priority = PRIORITY_NORMAL;
         if (!RepeatRules.valid(recurrence)) throw new IllegalArgumentException("Unsupported repeat interval");
         if (dueAt <= 0 && notifyBeforeMinutes != REMINDER_OFF) notifyBeforeMinutes = -1;
-        if (notifyBeforeMinutes != REMINDER_OFF && notifyBeforeMinutes != -1 && notifyBeforeMinutes != 0 && notifyBeforeMinutes != 5 &&
-                notifyBeforeMinutes != 10 && notifyBeforeMinutes != 15 &&
-                notifyBeforeMinutes != 30 && notifyBeforeMinutes != 60) {
+        if (notifyBeforeMinutes != REMINDER_OFF && notifyBeforeMinutes != -1 &&
+                (notifyBeforeMinutes < 0 || notifyBeforeMinutes > 1440)) {
             throw new IllegalArgumentException("Unsupported early reminder time");
         }
         if (recurrence != REPEAT_NEVER && dueAt <= 0) {
