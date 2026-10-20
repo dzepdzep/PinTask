@@ -70,7 +70,7 @@ final class VoiceLanguages {
             s=replace(s,"\\b(\\d{1,3}|[\\p{L}ß]+)\\s+(?:stunden?)\\s+(?:vorher|früher|davor)\\b", m->numeral(m.group(1),"de-DE")+" hours before");
             s=replace(s,"\\bin\\s+(\\d{1,4}|[\\p{L}ß]+)\\s+(?:minuten?|mins?)\\b",m->"in "+numeral(m.group(1),"de-DE")+" minutes");
             s=replace(s,"\\bin\\s+(\\d{1,3}|[\\p{L}ß]+)\\s+(?:stunden?)\\b",m->"in "+numeral(m.group(1),"de-DE")+" hours");
-            s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*(?:uhr)?\\b",m->clock(m,"de-DE"));
+            s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?(?:\\s+uhr\\b)?",m->clock(m,"de-DE"));
             s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*$",m->clock(m,"de-DE"));
         } else {
             s=replace(s,"^(?:molim\\s+te\\s+)?(?:podsjeti\\s+me\\s+(?:da\\s+)?|podsjeti\\s+me\\s+|moram\\s+|trebam\\s+|treba\\s+mi\\s+)","");
@@ -99,7 +99,7 @@ final class VoiceLanguages {
             s=replace(s,"\\b(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\s+(?:prije|ranije)\\b",m->numeral(m.group(1),"hr-HR")+" hours before");
             s=replace(s,"\\bza\\s+(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" minutes");
             s=replace(s,"\\bza\\s+(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" hours");
-            s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*(?:sati|sat)?\\b",m->clock(m,"hr-HR"));
+            s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?(?:\\s+(?:sati|sat)\\b)?",m->clock(m,"hr-HR"));
             s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*$",m->clock(m,"hr-HR"));
         }
         return s.replaceAll("\\s+"," ").trim();
