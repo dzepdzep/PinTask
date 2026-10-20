@@ -19,7 +19,7 @@ final class VoiceTaskDialog {
         LinearLayout panel=new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
         int padding=Math.round(20*activity.getResources().getDisplayMetrics().density);
-        panel.setPadding(padding,0,padding,padding,0);
+        panel.setPadding(padding,0,padding,0);
         TextView hint=new TextView(activity);
         hint.setText("Examples:\nWash the dishes today at 13:00\nTake out bins every other Tuesday at 08:00\nTake medication in 30 minutes\n\nRecognition may use your phone's speech service. Review before saving.");
         hint.setTextSize(14);
@@ -57,7 +57,7 @@ final class VoiceTaskDialog {
         LinearLayout panel=new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
         int padding=Math.round(20*activity.getResources().getDisplayMetrics().density);
-        panel.setPadding(padding,0,padding,padding,0);
+        panel.setPadding(padding,0,padding,0);
 
         TextView nameLabel=new TextView(activity);
         nameLabel.setText("Task name");panel.addView(nameLabel);
