@@ -59,7 +59,7 @@ final class ReminderHealth {
                 !TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             new AlertDialog.Builder(a).setTitle("Your task alarm may be silent")
                     .setMessage("Android notifications may be blocked, or the active Timed task alarms category may be silent or low importance. The task is saved, but it may not make a sound until you fix its notification category settings.")
-                    .setNegativeButton("Later",null).setPositiveButton("Fix notifications",(d,i)->openNotifications(a)).show();
+                    .setNegativeButton("Later",null).setPositiveButton("Fix alarm channel",(d,i)->openAlarmChannel(a)).show();
         } else if(!ReminderScheduler.canScheduleExact(a)) {
             new AlertDialog.Builder(a).setTitle("Your timed reminder could arrive late")
                     .setMessage("Exact alarm access is disabled. PinTask saved this task with an inexact fallback, which Android may delay. Allow Alarms & reminders for the intended time.")
@@ -126,6 +126,15 @@ final class ReminderHealth {
         try {
             a.startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+a.getPackageName())));
         } catch(Exception unavailable) {openAppSettings(a);}
+    }
+
+    private static void openAlarmChannel(Activity a) {
+        try {
+            Intent i = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+            i.putExtra(Settings.EXTRA_APP_PACKAGE, a.getPackageName());
+            i.putExtra(Settings.EXTRA_CHANNEL_ID, TaskNotifications.activeReminderChannel(a));
+            a.startActivity(i);
+        } catch (Exception unavailable) { openNotifications(a); }
     }
 
     private static void openNotifications(Activity a) {
