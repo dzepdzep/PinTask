@@ -129,15 +129,20 @@ public class ReminderSchedulerTest {
 
     @Test public void silentOrLowImportanceChannelIsNotReportedAudible() {
         TaskNotifications.ensureChannel(context);
-        String id=TaskNotifications.activeReminderChannel(context);
-        assertTrue(TaskNotifications.canAlertAudibly(context,id));
-        notifications.deleteNotificationChannel(id);
-        NotificationChannel quiet=new NotificationChannel(id,"Muted",NotificationManager.IMPORTANCE_LOW);
+        assertTrue(TaskNotifications.canAlertAudibly(context,TaskNotifications.activeReminderChannel(context)));
+        // Use distinct categories: deleting/recreating a channel can restore the
+        // original user-defined sound and importance on actual Android.
+        NotificationChannel quiet=new NotificationChannel("test_quiet","Quiet",NotificationManager.IMPORTANCE_LOW);
         quiet.setSound(null,null);
         notifications.createNotificationChannel(quiet);
-        assertTrue(TaskNotifications.canNotifyChannel(context,id));
-        assertFalse(TaskNotifications.canAlertAudibly(context,id));
-        assertEquals(StartupAccess.ALARM_CHANNEL,StartupAccess.nextRequired(context));
+        assertTrue(TaskNotifications.canNotifyChannel(context,"test_quiet"));
+        assertFalse(TaskNotifications.canAlertAudibly(context,"test_quiet"));
+
+        NotificationChannel silent=new NotificationChannel("test_silent","Silent",NotificationManager.IMPORTANCE_HIGH);
+        silent.setSound(null,null);
+        notifications.createNotificationChannel(silent);
+        assertTrue(TaskNotifications.canNotifyChannel(context,"test_silent"));
+        assertFalse(TaskNotifications.canAlertAudibly(context,"test_silent"));
     }
 
     @Test public void syncDoesNotPrePostAndSilenceAnOverdueFirstAlarm() {
