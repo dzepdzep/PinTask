@@ -38,7 +38,7 @@ final class SpokenTask {
         "\\bin\\s+(\\d+(?:[.,]\\d+)?)\\s*(hours?|hrs?|h|minutes?|mins?|m)\\b",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern BEFORE=Pattern.compile(
-        "\\b(?:(\\d{1,4})\\s*(minutes?|mins?|m|hours?|hrs?|h)|half\\s+(?:an?\\s+)?hour)\\s+before\\b",
+        "\\b(?:(\\d{1,4})\\s*(minutes?|mins?|m|hours?|hrs?|h)|half\\s+(?:an?\\s+)?hour)\\s+(?:before(?:hand)?|earlier|early|in\\s+advance)\\b",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern LEAD=Pattern.compile(
         "^(?:please\\s+)?(?:remind\\s+me\\s+to|i\\s+need\\s+to|i\\s+have\\s+to|"+
@@ -150,7 +150,8 @@ final class SpokenTask {
         if(Pattern.compile("(?i)\\b(?:every|tomorrow|today|next\\s+\\w+|at\\s+\\d+|in\\s+\\d+|before)\\b").matcher(working).find())
             throw new IllegalArgumentException("I couldn't understand the entire schedule. Please edit the command.");
         String title=working.replaceAll("(?i)\\b(?:on|for)\\s*$","")
-                .replaceAll("(?i)^\\s*(?:on|for)\\s+","").trim()
+                .replaceAll("^[,;\\s]+","")
+                .replaceAll("(?i)^(?:to|on|for)\\s+","").trim()
                 .replaceAll("[,.;!?]+$","").trim();
         if(title.isEmpty())throw new IllegalArgumentException("Please include what needs doing.");
         if(title.length()>160)throw new IllegalArgumentException("Task name must be 160 characters or less.");
