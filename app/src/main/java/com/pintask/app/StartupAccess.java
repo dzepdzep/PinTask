@@ -40,7 +40,7 @@ final class StartupAccess {
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             return RUNTIME_NOTIFICATIONS;
         if (!TaskNotifications.canNotify(context)) return APP_NOTIFICATIONS;
-        if (!TaskNotifications.canNotifyChannel(context, TaskNotifications.REMINDER_CHANNEL)) return ALARM_CHANNEL;
+        if (!TaskNotifications.canNotifyChannel(context, TaskNotifications.activeReminderChannel(context))) return ALARM_CHANNEL;
         if (!TaskNotifications.canNotifyChannel(context, TaskNotifications.CHANNEL)) return TASK_CHANNEL;
         if (!ReminderScheduler.canScheduleExact(context)) return EXACT_ALARMS;
         return READY;
@@ -57,7 +57,7 @@ final class StartupAccess {
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED;
         NotificationManager nm=context.getSystemService(NotificationManager.class);
         boolean appAlerts=nm!=null && nm.areNotificationsEnabled();
-        boolean alarms=TaskNotifications.canNotifyChannel(context,TaskNotifications.REMINDER_CHANNEL);
+        boolean alarms=TaskNotifications.canNotifyChannel(context,TaskNotifications.activeReminderChannel(context));
         boolean tasks=TaskNotifications.canNotifyChannel(context,TaskNotifications.CHANNEL);
         boolean exact=ReminderScheduler.canScheduleExact(context);
         AudioManager audio=context.getSystemService(AudioManager.class);
@@ -183,7 +183,7 @@ final class StartupAccess {
                 out=new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
                 out.putExtra(Settings.EXTRA_APP_PACKAGE,context.getPackageName());
                 out.putExtra(Settings.EXTRA_CHANNEL_ID,issue==ALARM_CHANNEL?
-                        TaskNotifications.REMINDER_CHANNEL:TaskNotifications.CHANNEL);
+                        TaskNotifications.activeReminderChannel(context):TaskNotifications.CHANNEL);
                 return out;
             case EXACT_ALARMS:
                 return new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,

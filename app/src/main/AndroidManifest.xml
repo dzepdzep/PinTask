@@ -29,6 +29,9 @@
             <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/task_widget_info" />
         </receiver>
+        <service android:name=".ReminderWatchdog"
+            android:permission="android.permission.BIND_JOB_SERVICE"
+            android:exported="true" />
         <receiver android:name=".TaskActionReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>

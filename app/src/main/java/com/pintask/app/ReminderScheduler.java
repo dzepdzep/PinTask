@@ -24,6 +24,7 @@ public final class ReminderScheduler {
 
     public static void schedule(Context context, TaskStore.Task task) {
         if (task == null || task.done || !task.reminderEnabled() || (task.dueAt <= 0 && task.shiftRunId == 0 && task.snoozedUntil == 0) || task.remindedAt > 0) return;
+        ReminderWatchdog.ensureScheduled(context);
         long notifyAt = task.notificationAt();
         if (notifyAt <= System.currentTimeMillis()) {
             deliver(context, task.id);
@@ -35,12 +36,14 @@ public final class ReminderScheduler {
         if (canScheduleExact(context)) {
             try {
                 manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
+                if(task.autoRepeat)ReminderAudit.note(context,"scheduled_exact",task.id,notifyAt);
                 return;
             } catch (SecurityException denied) {
                 // Keep a reminder scheduled if exact access is unavailable.
             }
         }
         manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
+        if(task.autoRepeat)ReminderAudit.note(context,"scheduled_inexact",task.id,notifyAt);
     }
 
     public static void cancel(Context context, long id) {
@@ -76,7 +79,7 @@ public final class ReminderScheduler {
             TaskStore.Task candidate = store.find(id);
             if (candidate == null) return;
             String channel = candidate.dueAt == 0 && candidate.snoozedUntil == 0
-                    ? TaskNotifications.CHANNEL : TaskNotifications.REMINDER_CHANNEL;
+                    ? TaskNotifications.CHANNEL : TaskNotifications.activeReminderChannel(context);
             if (!TaskNotifications.canNotifyChannel(context, channel)) return;
             TaskStore.Task task = store.claimDueReminder(id);
             if (task != null) {
@@ -88,12 +91,16 @@ public final class ReminderScheduler {
                         // Old behavior for tasks configured to appear immediately.
                         TaskNotifications.showDue(context, task);
                     }
+                    ReminderAudit.note(context,"delivered",id,task.notificationAt());
+                    if(System.currentTimeMillis()-task.notificationAt()>120_000L)
+                        ReminderAudit.note(context,"overdue_recovered",id,task.notificationAt());
                     // Only new opt-in routines auto-create their next independent occurrence.
                     // This must happen after successful notification posting.
                     TaskStore.Task following=store.createNextRoutineOccurrence(id);
                     if(following!=null) schedule(context,following);
                 } catch (RuntimeException failure) {
                     store.getWritableDatabase().execSQL("UPDATE tasks SET reminded_at=0 WHERE _id=? AND done=0", new Object[]{id});
+                    ReminderAudit.note(context,"delivery_error",id,candidate.notificationAt());
                     android.util.Log.w("PinTask", "Reminder posting failed for task " + id, failure);
                 }
             }
