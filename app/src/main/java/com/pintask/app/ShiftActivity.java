@@ -192,14 +192,30 @@ public final class ShiftActivity extends Activity {
                 "Core reminders allowed · Review startup permissions and battery":"Action needed · Grant missing reminder access",
                 ()->startupAccess.review());
         tool("Reminder health check","Test the alarm sound, permissions and a 60-second scheduled alarm",()->ReminderHealth.show(this));
+        tool("Reminder diagnostics","See scheduled, received and late alarms · Copy report",()->ReminderDiagnostics.show(this));
+        tool("Reminder pop-up banners",TaskNotifications.popupEnabled(this)?
+                "On · Show WhatsApp-style heads-up alerts for due tasks":"Off · Sound and status-bar icon without pop-up",this::popupSettings);
         tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.4",12);
+        text("PinTask 3.6",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
+    private void popupSettings(){
+        new AlertDialog.Builder(this)
+                .setTitle("Reminder pop-up banners")
+                .setMessage("On: due reminders use an urgent notification category that can pop up at the top of the screen. Off: reminders still sound and appear in the notification shade and status bar, but use a less interruptive category. ColorOS and Do Not Disturb can override these preferences.")
+                .setSingleChoiceItems(new String[]{"Off · No heads-up banner","On · Show heads-up banner"},
+                        TaskNotifications.popupEnabled(this)?1:0,(d,selected)->{
+                            TaskNotifications.setPopupEnabled(this,selected==1);
+                            d.dismiss();render();
+                            if(!TaskNotifications.canNotifyChannel(this,TaskNotifications.activeReminderChannel(this)))
+                                ReminderHealth.warnWhenBlocked(this);
+                        })
+                .setNegativeButton("Cancel",null).show();
+    }
     private void quickSettings(){new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();render();if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},42);}).setNegativeButton("Cancel",null).show();}
     private void historyPage(){heading("Completed tasks","Your task history");link("‹ Back to More",()->navigate(MORE));try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> done=store.completedAll();if(done.isEmpty())empty("Nothing completed yet","Finished tasks will appear here.");for(TaskStore.Task task:done)body.addView(TaskCards.done(this,task,this::render));}}
     private String selectedCustomShiftLabel() {
