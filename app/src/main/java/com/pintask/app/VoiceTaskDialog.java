@@ -69,65 +69,155 @@ final class VoiceTaskDialog {
         dialog.show();
     }
 
+    private static final int FG=Color.rgb(238,244,251);
+    private static final int MUTED=Color.rgb(156,173,194);
+
+    private static int dp(Activity activity,int amount){
+        return Math.round(amount*activity.getResources().getDisplayMetrics().density);
+    }
+
+    private static TextView label(Activity activity,String text,int size,boolean emphasized){
+        TextView result=new TextView(activity);
+        result.setText(text);
+        result.setTextSize(size);
+        result.setTextColor(emphasized?FG:MUTED);
+        result.setPadding(0,dp(activity,8),0,dp(activity,3));
+        return result;
+    }
+
+    /**
+     * Everything Android understood is visible and independently correctable:
+     * task text, due date, 24-hour clock time, and recurrence. No re-dictation.
+     */
     private static void review(Activity activity,SpokenTask parsed,Runnable saved){
+        VoiceReviewModel model=new VoiceReviewModel(parsed,java.time.ZoneId.systemDefault());
+        int pad=dp(activity,18);
+
         LinearLayout panel=new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
-        int padding=Math.round(20*activity.getResources().getDisplayMetrics().density);
-        panel.setPadding(padding,0,padding,0);
+        panel.setPadding(pad,dp(activity,6),pad,dp(activity,12));
 
-        TextView nameLabel=new TextView(activity);
-        nameLabel.setText("Task name");panel.addView(nameLabel);
+        panel.addView(label(activity,"WHAT I HEARD",12,false));
+        TextView heard=label(activity,parsed.original,15,true);
+        heard.setPadding(dp(activity,12),dp(activity,10),dp(activity,12),dp(activity,10));
+        android.graphics.drawable.GradientDrawable background=new android.graphics.drawable.GradientDrawable();
+        background.setColor(Color.rgb(32,45,65));
+        background.setCornerRadius(dp(activity,10));
+        heard.setBackground(background);
+        panel.addView(heard);
+        panel.addView(label(activity,"Check each part below. Tap any date, time, or repeat setting to correct it.",13,false));
+
+        panel.addView(label(activity,"TASK NAME",12,false));
         EditText title=new EditText(activity);
         title.setText(parsed.title);
+        title.setTextSize(17);
+        title.setTextColor(FG);
         title.setSingleLine(true);
+        title.setSelectAllOnFocus(true);
+        title.setContentDescription("Recognized task name");
         title.setFilters(new InputFilter[]{new InputFilter.LengthFilter(160)});
         panel.addView(title);
 
-        TextView dateLabel=new TextView(activity);
-        dateLabel.setText("Scheduled notification");
-        dateLabel.setTextSize(15);
-        dateLabel.setPadding(0,padding/2,0,0);
-        panel.addView(dateLabel);
-        TextView dateText=new TextView(activity);
-        dateText.setText(parsed.schedule);
-        dateText.setTextSize(17);
-        dateText.setPadding(0,0,0,padding/2);
-        panel.addView(dateText);
+        panel.addView(label(activity,"DATE",12,false));
+        android.widget.Button dateButton=new android.widget.Button(activity);
+        dateButton.setAllCaps(false);
+        dateButton.setContentDescription("Change reminder date");
+        panel.addView(dateButton,new LinearLayout.LayoutParams(-1,dp(activity,49)));
 
-        TextView warning=new TextView(activity);
-        warning.setText("Confirm the date, time and repeat schedule before creating this task. If they're incorrect, choose Edit command.");
-        warning.setTextSize(13);
-        panel.addView(warning);
+        panel.addView(label(activity,"TIME · 24-HOUR CLOCK",12,false));
+        android.widget.Button timeButton=new android.widget.Button(activity);
+        timeButton.setAllCaps(false);
+        timeButton.setContentDescription("Change reminder time");
+        panel.addView(timeButton,new LinearLayout.LayoutParams(-1,dp(activity,49)));
 
+        panel.addView(label(activity,"REPEAT",12,false));
+        android.widget.Button repeatButton=new android.widget.Button(activity);
+        repeatButton.setAllCaps(false);
+        repeatButton.setContentDescription("Change repeat pattern");
+        panel.addView(repeatButton,new LinearLayout.LayoutParams(-1,dp(activity,49)));
+
+        TextView summary=label(activity,"",14,true);
+        summary.setPadding(0,dp(activity,10),0,dp(activity,8));
+        panel.addView(summary);
+
+        Runnable refresh=()->{
+            dateButton.setText(model.dateLabel()+"   ✎");
+            timeButton.setText(model.timeLabel()+"   ✎");
+            repeatButton.setText(model.repeatLabel()+"   ▾");
+            summary.setText(model.preview()+
+                    "\n"+(model.repeatCode()==0?"One-time task":"Repeats: "+model.repeatLabel())+
+                    "\nNothing is saved until you tap Create task.");
+        };
+        refresh.run();
+        dateButton.setOnClickListener(v->{
+            java.time.LocalDate initial=model.day()!=null?model.day():java.time.LocalDate.now();
+            new android.app.DatePickerDialog(activity,(picker,year,month,day)->{
+                model.changeDate(java.time.LocalDate.of(year,month+1,day));
+                refresh.run();
+            },initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth()).show();
+        });
+        timeButton.setOnClickListener(v->{
+            java.time.LocalTime initial=model.time()!=null?model.time():java.time.LocalTime.now();
+            new android.app.TimePickerDialog(activity,(picker,hour,minute)->{
+                model.changeTime(java.time.LocalTime.of(hour,minute),java.time.LocalDate.now());
+                refresh.run();
+            },initial.getHour(),initial.getMinute(),true).show();
+        });
+        repeatButton.setOnClickListener(v->{
+            String[] options={
+                    "Keep detected · "+model.repeatLabel(),
+                    "Does not repeat",
+                    "Every day",
+                    "Every week",
+                    "Every other week",
+                    "Every other day",
+                    "Every hour",
+                    "Every 2 hours",
+                    "Every 3 hours",
+                    "Every 4 hours",
+                    "Every "+(model.day()==null?"chosen weekday":model.day().getDayOfWeek().toString().substring(0,1)+
+                            model.day().getDayOfWeek().toString().substring(1).toLowerCase(java.util.Locale.ROOT))
+            };
+            int currentWeekday=model.day()==null?java.time.LocalDate.now().getDayOfWeek().getValue():model.day().getDayOfWeek().getValue();
+            int[] codes={model.repeatCode(),0,1,2,4,5,5001,5002,5003,5004,4000+(1<<(currentWeekday-1))};
+            new AlertDialog.Builder(activity).setTitle("Repeat this task")
+                    .setItems(options,(d,choice)->{
+                        if(choice>0){model.changeRepeat(codes[choice]);refresh.run();}
+                    }).setNegativeButton("Cancel",null).show();
+        });
+
+        android.widget.ScrollView scroll=new android.widget.ScrollView(activity);
+        scroll.setFillViewport(false);
+        scroll.addView(panel);
         AlertDialog dialog=new AlertDialog.Builder(activity)
-                .setTitle("Confirm voice task")
-                .setView(panel)
+                .setTitle("Check your voice task")
+                .setView(scroll)
                 .setNegativeButton("Cancel",null)
-                .setNeutralButton("Edit command",(d,w)->editCommand(activity,parsed.original,saved))
+                .setNeutralButton("Edit transcript",(d,w)->editCommand(activity,parsed.original,saved))
                 .setPositiveButton("Create task",null).create();
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             String actual=title.getText().toString().trim();
             if(actual.isEmpty()){title.setError("Enter the task name");return;}
             try {
-                if(parsed.dueAt>0&&parsed.dueAt<=System.currentTimeMillis())
-                    throw new IllegalArgumentException("The reminder time has passed. Edit the command.");
+                long dueAt=model.validatedDueAt(System.currentTimeMillis());
                 TaskStore.Task task;
                 try(TaskStore store=new TaskStore(activity)){
-                    // Timed tasks are always alerts at task time, never silently No reminder.
-                    task=store.add(actual,TaskStore.PRIORITY_NORMAL,parsed.dueAt,
-                            parsed.repeatCode,parsed.dueAt==0?-1:0);
+                    task=store.add(actual,TaskStore.PRIORITY_NORMAL,dueAt,
+                            model.repeatCode(),dueAt==0?-1:0);
                     task=store.setGroup(task.id,"");
-                    if(parsed.repeatCode!=0)task=store.enableAutomaticRoutine(task.id);
+                    if(model.repeatCode()!=0)task=store.enableAutomaticRoutine(task.id);
                 }
-                if(parsed.dueAt==0)TaskNotifications.show(activity,task);
+                if(dueAt==0)TaskNotifications.show(activity,task);
                 else ReminderScheduler.schedule(activity,task);
                 TaskWidget.refreshAll(activity);
                 dialog.dismiss();
                 saved.run();
-                if(parsed.dueAt>0)ReminderHealth.warnWhenBlocked(activity);
+                if(dueAt>0)ReminderHealth.warnWhenBlocked(activity);
                 Toast.makeText(activity,"Voice task saved",Toast.LENGTH_LONG).show();
-            } catch(IllegalArgumentException error) {
+            }catch(IllegalArgumentException error){
                 Toast.makeText(activity,error.getMessage(),Toast.LENGTH_LONG).show();
+                summary.setText(error.getMessage()+"\nTap Date, Time, or Repeat above to correct it.");
+                summary.setTextColor(Color.rgb(255,180,163));
             }
         }));
         dialog.show();
