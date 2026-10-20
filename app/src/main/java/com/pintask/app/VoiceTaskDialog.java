@@ -46,8 +46,24 @@ final class VoiceTaskDialog {
                 dialog.dismiss();
                 review(activity,parsed,saved);
             }catch(IllegalArgumentException invalid){
-                command.setError(invalid.getMessage());
-                Toast.makeText(activity,invalid.getMessage(),Toast.LENGTH_LONG).show();
+                if(invalid.getMessage()!=null&&(invalid.getMessage().startsWith("Please specify a time")||
+                        invalid.getMessage().startsWith("Please add a time"))){
+                    new android.app.TimePickerDialog(activity,(picker,hour,minute)->{
+                        String corrected=command.getText().toString().trim()+
+                                String.format(java.util.Locale.ROOT," at %02d:%02d",hour,minute);
+                        command.setText(corrected);
+                        try{
+                            SpokenTask amended=SpokenTask.parse(corrected,ZonedDateTime.now());
+                            dialog.dismiss();
+                            review(activity,amended,saved);
+                        }catch(IllegalArgumentException wrong){
+                            command.setError(wrong.getMessage());
+                        }
+                    },9,0,true).show();
+                }else{
+                    command.setError(invalid.getMessage());
+                    Toast.makeText(activity,invalid.getMessage(),Toast.LENGTH_LONG).show();
+                }
             }
         }));
         dialog.show();
