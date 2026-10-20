@@ -5,6 +5,9 @@ import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.media.AudioManager;
+import android.media.AudioAttributes;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -35,6 +38,7 @@ final class ReminderHealth {
     static void show(Activity a) {
         String[] choices={
             "Play an alarm notification now",
+            "Play alarm ringtone directly (5 seconds)",
             "Schedule an alarm test in 60 seconds",
             "Enable alarms for existing silent timed tasks…",
             "Open exact alarm permission",
@@ -46,11 +50,12 @@ final class ReminderHealth {
                 .setItems(choices,(d,which)->{
                     switch(which) {
                         case 0: immediateTest(a);break;
-                        case 1: delayedTest(a);break;
-                        case 2: offerExisting(a);break;
-                        case 3: openExact(a);break;
-                        case 4: openNotifications(a);break;
-                        case 5: openAppSettings(a);break;
+                        case 1: directRingtoneTest(a);break;
+                        case 2: delayedTest(a);break;
+                        case 3: offerExisting(a);break;
+                        case 4: openExact(a);break;
+                        case 5: openNotifications(a);break;
+                        case 6: openAppSettings(a);break;
                     }
                 }).setPositiveButton("Close",null).show();
     }
@@ -65,6 +70,34 @@ final class ReminderHealth {
             new AlertDialog.Builder(a).setTitle("Your timed reminder could arrive late")
                     .setMessage("Exact alarm access is disabled. PinTask saved this task with an inexact fallback, which Android may delay. Allow Alarms & reminders for the intended time.")
                     .setNegativeButton("Later",null).setPositiveButton("Enable exact alarms",(d,i)->openExact(a)).show();
+        }
+    }
+
+    /**
+     * Explicit user-initiated sound-only check. Notification test vs direct
+     * ringtone tells users whether their phone is silencing the notification
+     * channel, or the alarm audio stream itself.
+     */
+    private static void directRingtoneTest(Activity a) {
+        try {
+            Ringtone ringtone=RingtoneManager.getRingtone(a,
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM));
+            if(ringtone==null) {
+                Toast.makeText(a,"No alarm ringtone configured in Android settings",Toast.LENGTH_LONG).show();
+                return;
+            }
+            ringtone.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+            ringtone.play();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+                try { ringtone.stop(); } catch (RuntimeException ignored) {}
+            },5000L);
+            Toast.makeText(a,"Alarm ringtone test: 5 seconds. Check alarm volume if silent.",Toast.LENGTH_LONG).show();
+        } catch (RuntimeException failure) {
+            android.util.Log.w("PinTask","Direct alarm ringtone test failed",failure);
+            Toast.makeText(a,"Unable to play alarm ringtone. Check Android alarm sound settings.",Toast.LENGTH_LONG).show();
         }
     }
 
