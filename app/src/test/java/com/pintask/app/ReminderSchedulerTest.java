@@ -170,6 +170,29 @@ public class ReminderSchedulerTest {
         assertFalse(report.contains("recovered_by_alarm #"+task.id));
     }
 
+    @Test @Config(sdk=31) public void optInAlarmClockUsesActualEarlyAlertTime() {
+        Shadows.shadowOf(alarms).setCanScheduleExactAlarms(true);
+        ReminderScheduler.setAlarmClockPriority(context,true);
+        long due=System.currentTimeMillis()+3_600_000L;
+        TaskStore.Task task=store.add("Alert 15 minutes early",1,due,0,15);
+        ReminderScheduler.schedule(context,task);
+        AlarmManager.AlarmClockInfo clock=alarms.getNextAlarmClock();
+        assertNotNull("Alarm clock priority must register an OS alarm-clock event",clock);
+        assertEquals(due-15*60_000L,clock.getTriggerTime());
+        assertTrue(ReminderAudit.summary(context).contains("scheduled_alarm_clock #"+task.id));
+    }
+
+    @Test @Config(sdk=31) public void optedInWithoutAccessReportsFallbackInsteadOfClaimingPrecision() {
+        Shadows.shadowOf(alarms).setCanScheduleExactAlarms(false);
+        ReminderScheduler.setAlarmClockPriority(context,true);
+        TaskStore.Task task=store.add("Inexact fallback",1,System.currentTimeMillis()+600_000L,0,0);
+        ReminderScheduler.schedule(context,task);
+        assertEquals(1,Shadows.shadowOf(alarms).getScheduledAlarms().size());
+        String report=ReminderAudit.summary(context);
+        assertTrue(report,report.contains("alarm_clock_permission_missing #"+task.id));
+        assertTrue(report,report.contains("scheduled_inexact #"+task.id));
+    }
+
     @Test @Config(sdk=31) public void deniedExactAccessKeepsInexactAlarm() {
         Shadows.shadowOf(alarms).setCanScheduleExactAlarms(false);
         assertFalse(ReminderScheduler.canScheduleExact(context));
