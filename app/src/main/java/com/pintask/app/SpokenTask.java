@@ -24,6 +24,11 @@ final class SpokenTask {
         this.schedule=schedule;this.isTimed=dueAt>0;
     }
 
+    /** Keep the original localized transcript visible after schedule normalization. */
+    SpokenTask withOriginal(String heard) {
+        return new SpokenTask(title,dueAt,repeatCode,remindBeforeMinutes,heard,schedule);
+    }
+
     private static final Pattern REPEAT=Pattern.compile(
         "\\b(every\\s+other\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"+
         "every\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"+
