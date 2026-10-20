@@ -71,6 +71,49 @@ public class SpokenTaskTest {
         SpokenTask two=SpokenTask.parse("Do the laundry in 2 hours",now);
         assertEquals(now.plusHours(2).toInstant().toEpochMilli(),two.dueAt);
     }
+    @Test public void voiceUnderstandsSpokenAdvanceWarningAndSeparatesDueAndAlarmTime(){
+        SpokenTask parsed=SpokenTask.parse(
+                "Remind me to wash the dishes tomorrow at 13:00 15 minutes before",now);
+        assertEquals("wash the dishes",parsed.title);
+        assertEquals(15,parsed.remindBeforeMinutes);
+        assertEquals(ZonedDateTime.of(2026,10,21,13,0,0,0,zone).toInstant().toEpochMilli(),
+                parsed.dueAt);
+        assertEquals(ZonedDateTime.of(2026,10,21,12,45,0,0,zone).toInstant().toEpochMilli(),
+                parsed.dueAt-parsed.remindBeforeMinutes*60_000L);
+    }
+    @Test public void remindersCanBeSpokenBeforeTheTaskNameOrAfterTime(){
+        SpokenTask ahead=SpokenTask.parse(
+                "Remind me 10 minutes before my appointment tomorrow at 14:00",now);
+        assertEquals("my appointment",ahead.title);
+        assertEquals(10,ahead.remindBeforeMinutes);
+        SpokenTask after=SpokenTask.parse(
+                "Take medication today at 20:00 5 minutes early",now);
+        assertEquals("Take medication",after.title);
+        assertEquals(5,after.remindBeforeMinutes);
+        SpokenTask words=SpokenTask.parse(
+                "Wash dishes tomorrow at 13:00 fifteen minutes before",now);
+        assertEquals(15,words.remindBeforeMinutes);
+    }
+    @Test public void halfHourAndRepeatPatternCanBeSpokenTogether(){
+        SpokenTask parsed=SpokenTask.parse(
+                "Remind me every other Tuesday at 08:00, half an hour before, to take out the bins",now);
+        assertEquals("take out the bins",parsed.title);
+        assertEquals(30,parsed.remindBeforeMinutes);
+        assertEquals(TaskStore.REPEAT_FORTNIGHTLY,parsed.repeatCode);
+        assertEquals(ZonedDateTime.of(2026,10,27,7,30,0,0,zone).toInstant().toEpochMilli(),
+                parsed.dueAt-30*60_000L);
+    }
+    @Test public void unsafeOrDoubleSpokenAdvanceIsRejected(){
+        assertThrows(IllegalArgumentException.class,
+                ()->SpokenTask.parse("Remind me to clean dishes today at 11:05 15 minutes before",now));
+        assertThrows(IllegalArgumentException.class,
+                ()->SpokenTask.parse("Wash dishes tomorrow at 13:00 2000 minutes before",now));
+        assertThrows(IllegalArgumentException.class,
+                ()->SpokenTask.parse("Wash dishes tomorrow at 13:00 5 minutes before and 10 minutes before",now));
+        assertThrows(IllegalArgumentException.class,
+                ()->SpokenTask.parse("Wash dishes 10 minutes before",now));
+    }
+
     @Test public void invalidOrPastTimesNeverProduceSilentImmediateReminders(){
         assertThrows(IllegalArgumentException.class,()->SpokenTask.parse("Wash dishes today at 08:00",now));
         assertThrows(IllegalArgumentException.class,()->SpokenTask.parse("Task tomorrow",now));
