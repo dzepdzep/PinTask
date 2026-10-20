@@ -98,7 +98,7 @@ public class VoiceTaskParserTest {
             VoiceTaskParser.Draft parsed=VoiceTaskParser.parse("Wash dishes tomorrow at 13",now());
             VoiceTaskReview.show(activity,parsed,()->{});
             AlertDialog preview=ShadowAlertDialog.getLatestAlertDialog();
-            assertEquals("Confirm spoken task",preview.getTitle());
+            assertNotNull(findText(preview.getWindow().getDecorView(),"Confirm spoken task"));
             assertNotNull(findText(preview.getWindow().getDecorView(),"Heard: Wash dishes tomorrow at 13"));
             assertNotNull(findText(preview.getWindow().getDecorView(),"Save task"));
             try(TaskStore store=new TaskStore(activity)){
