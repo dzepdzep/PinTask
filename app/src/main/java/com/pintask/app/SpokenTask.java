@@ -52,7 +52,7 @@ final class SpokenTask {
         DayOfWeek weekday=null;
         if(rm.find()) {
             String words=rm.group(1);
-            if(words.startsWith("every other ")&&words.endsWith("day"))repeat=5;
+            if(words.equals("every other day"))repeat=5;
             else if(words.equals("every day")||words.equals("every daily"))repeat=TaskStore.REPEAT_DAILY;
             else if(words.equals("every hour"))repeat=5001;
             else if(words.equals("every two weeks")||words.equals("every 2 weeks"))repeat=TaskStore.REPEAT_FORTNIGHTLY;
