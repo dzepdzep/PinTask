@@ -105,7 +105,7 @@ final class VoiceTaskDialog {
         background.setCornerRadius(dp(activity,10));
         heard.setBackground(background);
         panel.addView(heard);
-        panel.addView(label(activity,"Check each part below. Tap any date, time, or repeat setting to correct it.",13,false));
+        panel.addView(label(activity,"Check the task, date, time, advance reminder and repeat. Tap any field to correct it.",13,false));
 
         panel.addView(label(activity,"TASK NAME",12,false));
         EditText title=new EditText(activity);
@@ -130,6 +130,12 @@ final class VoiceTaskDialog {
         timeButton.setContentDescription("Change reminder time");
         panel.addView(timeButton,new LinearLayout.LayoutParams(-1,dp(activity,49)));
 
+        panel.addView(label(activity,"REMIND ME",12,false));
+        android.widget.Button earlyButton=new android.widget.Button(activity);
+        earlyButton.setAllCaps(false);
+        earlyButton.setContentDescription("Change advance reminder");
+        panel.addView(earlyButton,new LinearLayout.LayoutParams(-1,dp(activity,49)));
+
         panel.addView(label(activity,"REPEAT",12,false));
         android.widget.Button repeatButton=new android.widget.Button(activity);
         repeatButton.setAllCaps(false);
@@ -144,6 +150,7 @@ final class VoiceTaskDialog {
             dateButton.setText(model.dateLabel()+"   ✎");
             timeButton.setText(model.timeLabel()+"   ✎");
             repeatButton.setText(model.repeatLabel()+"   ▾");
+            earlyButton.setText(model.advanceLabel()+"   ▾");
             summary.setText(model.preview()+
                     "\n"+(model.repeatCode()==0?"One-time task":"Repeats: "+model.repeatLabel())+
                     "\nNothing is saved until you tap Create task.");
@@ -162,6 +169,48 @@ final class VoiceTaskDialog {
                 model.changeTime(java.time.LocalTime.of(hour,minute),java.time.LocalDate.now());
                 refresh.run();
             },initial.getHour(),initial.getMinute(),true).show();
+        });
+        earlyButton.setOnClickListener(v->{
+            String[] options={"At task time","5 minutes before","10 minutes before",
+                    "15 minutes before","30 minutes before","1 hour before",
+                    "Custom minutes before…"};
+            int[] minutes={0,5,10,15,30,60};
+            new AlertDialog.Builder(activity).setTitle("Remind me before")
+                    .setItems(options,(d,which)->{
+                        if(which<minutes.length){
+                            model.changeAdvance(minutes[which]);
+                            refresh.run();
+                        }else{
+                            EditText number=new EditText(activity);
+                            number.setSingleLine(true);
+                            number.setInputType(InputType.TYPE_CLASS_NUMBER);
+                            number.setHint("Minutes before (1–1440)");
+                            number.setText(""+(model.notifyBeforeMinutes()>0?
+                                    model.notifyBeforeMinutes():20));
+                            int padding=dp(activity,20);
+                            LinearLayout wrap=new LinearLayout(activity);
+                            wrap.setOrientation(LinearLayout.VERTICAL);
+                            wrap.setPadding(padding,0,padding,0);
+                            wrap.addView(number);
+                            AlertDialog custom=new AlertDialog.Builder(activity)
+                                    .setTitle("Custom advance reminder")
+                                    .setMessage("How many minutes before the task should the alarm sound?")
+                                    .setView(wrap).setNegativeButton("Cancel",null)
+                                    .setPositiveButton("Set reminder",null).create();
+                            custom.setOnShowListener(shown->
+                                    custom.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(btn->{
+                                try{
+                                    int amount=Integer.parseInt(number.getText().toString().trim());
+                                    model.changeAdvance(amount);
+                                    custom.dismiss();
+                                    refresh.run();
+                                }catch(IllegalArgumentException wrong){
+                                    number.setError("Enter 1–1440 minutes.");
+                                }
+                            }));
+                            custom.show();
+                        }
+                    }).setNegativeButton("Cancel",null).show();
         });
         repeatButton.setOnClickListener(v->{
             String[] options={
@@ -203,7 +252,7 @@ final class VoiceTaskDialog {
                 TaskStore.Task task;
                 try(TaskStore store=new TaskStore(activity)){
                     task=store.add(actual,TaskStore.PRIORITY_NORMAL,dueAt,
-                            model.repeatCode(),dueAt==0?-1:0);
+                            model.repeatCode(),dueAt==0?-1:model.notifyBeforeMinutes());
                     task=store.setGroup(task.id,"");
                     if(model.repeatCode()!=0)task=store.enableAutomaticRoutine(task.id);
                 }
@@ -216,7 +265,7 @@ final class VoiceTaskDialog {
                 Toast.makeText(activity,"Voice task saved",Toast.LENGTH_LONG).show();
             }catch(IllegalArgumentException error){
                 Toast.makeText(activity,error.getMessage(),Toast.LENGTH_LONG).show();
-                summary.setText(error.getMessage()+"\nTap Date, Time, or Repeat above to correct it.");
+                summary.setText(error.getMessage()+"\nTap Date, Time, Remind me, or Repeat to correct it.");
                 summary.setTextColor(Color.rgb(255,180,163));
             }
         }));
