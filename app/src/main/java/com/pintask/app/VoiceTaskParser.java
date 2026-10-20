@@ -115,6 +115,15 @@ final class VoiceTaskParser {
             out.day=now.toLocalDate();
             out.hour=now.getHour();out.minute=now.getMinute();
         }
+        // Calendar repeats naturally start at their next future occurrence.
+        // Never move explicit "today" one-off requests into tomorrow silently.
+        if(!out.midnightNeedsConfirmation&&!out.explicitDate&&out.hasTime()&&out.day!=null
+                && out.recurrence>0&&out.recurrence<5000
+                && out.dueMillis(now.getZone())<=now.toInstant().toEpochMilli()){
+            if(out.recurrence==TaskStore.REPEAT_DAILY)out.day=out.day.plusDays(1);
+            else if(out.recurrence==TaskStore.REPEAT_WEEKLY||
+                    out.recurrence==TaskStore.REPEAT_FORTNIGHTLY)out.day=out.day.plusWeeks(1);
+        }
         out.title=PREFIX.matcher(text.replaceAll("\\s+"," ").trim()).replaceFirst("").trim()
                 .replaceAll("(?i)\\s+(?:on|at|um|am|u|to)$","")
                 .replaceAll("\\s+"," ").trim();
