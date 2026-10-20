@@ -51,7 +51,6 @@ final class VoiceLanguages {
             s=replace(s,"\\b(?:jeden|jede)\\s+zweiten\\b","every other");
             s=replace(s,"\\balle\\s+(?:zwei|2)\\s+wochen\\b","every two weeks");
             s=replace(s,"\\b(?:jeden|jede|jedem|jede[nrsm]?)\\b","every");
-            s=replace(s,"\\bam\\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\\b","next $1");
             s=replace(s,"\\b(?:alle\\s+)?(\\d{1,2})\\s+stunden\\b","every $1 hours");
             s=replace(s,"\\b(?:täglich|taeglich)\\b","every day");
             s=replace(s,"\\b(?:heute)\\b","today");
@@ -64,6 +63,7 @@ final class VoiceLanguages {
                     case "freitag":return "Friday";case "samstag":return "Saturday";
                     case "sonntag":return "Sunday";default:return match.group();}
             });
+            s=replace(s,"\\bam\\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\\b","next $1");
             s=replace(s,"\\b(?:tag)\\b","day");
             s=replace(s,"\\b(?:stunde)\\b","hour");
             s=replace(s,"\\b(\\d{1,4}|[\\p{L}ß]+)\\s+(?:minuten?|mins?)\\s+(?:vorher|früher|davor)\\b", m->numeral(m.group(1),"de-DE")+" minutes before");
