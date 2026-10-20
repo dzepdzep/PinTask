@@ -23,6 +23,10 @@ public final class TaskNotifications {
     public static final String CHANNEL = "unfinished_tasks";
     // New ID: Android does not allow apps to change the sound of an existing channel.
     public static final String REMINDER_CHANNEL = "due_reminders_alarm_v3";
+    // Android channels have immutable importance. Separate default-importance
+    // channel enables disabling heads-up while keeping alarm sound and vibration.
+    static final String NO_POPUP_CHANNEL="due_reminders_no_popup_v36";
+    private static final String POPUP_PREF="reminder_popup_banners_v36";
     public static final String ACTION_DONE = "com.pintask.app.ACTION_DONE";
     public static final String ACTION_UNDO = "com.pintask.app.ACTION_UNDO";
     public static final String ACTION_DISMISSED = "com.pintask.app.ACTION_DISMISSED";
@@ -55,6 +59,26 @@ public final class TaskNotifications {
                 .setUsage(AudioAttributes.USAGE_ALARM).build();
         due.setSound(Settings.System.DEFAULT_ALARM_ALERT_URI,audio);
         manager.createNotificationChannel(due);
+        NotificationChannel calm=new NotificationChannel(
+                NO_POPUP_CHANNEL,"Timed alarms without pop-up",NotificationManager.IMPORTANCE_DEFAULT);
+        calm.setDescription("Audible timed reminders that stay in the shade without heads-up banners");
+        calm.enableVibration(true);
+        calm.setVibrationPattern(new long[]{0,300,180,300,180,500});
+        calm.setSound(Settings.System.DEFAULT_ALARM_ALERT_URI,audio);
+        manager.createNotificationChannel(calm);
+    }
+
+    static boolean popupEnabled(Context context) {
+        return context.getSharedPreferences("settings",Context.MODE_PRIVATE)
+                .getBoolean(POPUP_PREF,true);
+    }
+    static void setPopupEnabled(Context context,boolean enabled){
+        context.getSharedPreferences("settings",Context.MODE_PRIVATE)
+                .edit().putBoolean(POPUP_PREF,enabled).apply();
+        ensureChannel(context);
+    }
+    static String activeReminderChannel(Context context){
+        return popupEnabled(context)?REMINDER_CHANNEL:NO_POPUP_CHANNEL;
     }
 
     public static boolean canNotify(Context context) {
@@ -169,7 +193,7 @@ public final class TaskNotifications {
         // Use the reminder channel for scheduled arrivals, so the first notification alerts.
         String channel = silent ? CHANNEL :
                 (task.snoozedUntil > 0 || (task.notifyBeforeMinutes >= 0 && task.dueAt > 0)
-                ? REMINDER_CHANNEL : CHANNEL);
+                ? activeReminderChannel(context) : CHANNEL);
         boolean watch=watchEnabled(context);
         Notification.Action done=doneAction(context,task.id);
         Notification notification = new Notification.Builder(context, channel)
@@ -178,7 +202,7 @@ public final class TaskNotifications {
                 .setContentText(detail)
                 .setCustomContentView(compactTask(context, task, false))
                 .setStyle(new Notification.DecoratedCustomViewStyle())
-                .setCategory(channel.equals(REMINDER_CHANNEL) ? Notification.CATEGORY_ALARM : Notification.CATEGORY_REMINDER)
+                .setCategory(channel.equals(CHANNEL) ? Notification.CATEGORY_REMINDER : Notification.CATEGORY_ALARM)
                 .setContentIntent(open(context,task.id))
                 .setDeleteIntent(dismissIntent(context,task.id,false))
                 .setAutoCancel(false)
@@ -202,7 +226,7 @@ public final class TaskNotifications {
         if(task.snoozedUntil>System.currentTimeMillis())return;
         ensureChannel(context);
         Notification.Action done=doneAction(context,task.id);
-        Notification notification = new Notification.Builder(context, silent?CHANNEL:REMINDER_CHANNEL)
+        Notification notification = new Notification.Builder(context, silent?CHANNEL:activeReminderChannel(context))
                 .setSmallIcon(R.drawable.ic_pin)
                 .setContentTitle("Due now: " + task.title)
                 .setContentText("Your scheduled PinTask reminder")
