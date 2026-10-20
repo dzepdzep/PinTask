@@ -133,7 +133,11 @@ public class VoiceTaskParserTest {
             VoiceTaskParser.Draft draft=VoiceTaskParser.parse("Wash dishes tomorrow at 13",ZonedDateTime.now());
             VoiceTaskReview.show(activity,draft,()->{});
             AlertDialog review=ShadowAlertDialog.getLatestAlertDialog();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertTrue(review.isShowing());
             review.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertFalse("Voice preview Save should dismiss dialog after successful insert",review.isShowing());
             try(TaskStore store=new TaskStore(activity)){
                 assertEquals(1,store.activeAll().size());
                 TaskStore.Task task=store.activeAll().get(0);
@@ -148,7 +152,7 @@ public class VoiceTaskParserTest {
     }
 
     private static View findDescription(View root,String text){
-        if(text.contentEquals(root.getContentDescription()))return root;
+        if(root.getContentDescription()!=null && text.contentEquals(root.getContentDescription()))return root;
         if(root instanceof ViewGroup){
             for(int i=0;i<((ViewGroup)root).getChildCount();i++){
                 View match=findDescription(((ViewGroup)root).getChildAt(i),text);
