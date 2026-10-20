@@ -16,6 +16,7 @@ import java.util.*;
 /** Three destinations: everyday Tasks, Work, and advanced More. */
 public final class ShiftActivity extends Activity {
     private static final int TASKS=0, WORK=1, MORE=2, EDITOR=3, HISTORY=4, PLAN=5;
+    private static final int REQUEST_SPOKEN_TASK=407;
     private static final int BG=Color.rgb(12,18,30),SURFACE=Color.rgb(24,34,51),BORDER=Color.rgb(43,57,76);
     private static final int FG=Color.rgb(238,244,251),MUTED=Color.rgb(156,173,194),ACCENT=Color.rgb(166,233,205);
     private static final int[] EARLY={-2,0,5,10,15,30,60},INTERVALS={0,30,60,120,180,240};
@@ -88,10 +89,48 @@ public final class ShiftActivity extends Activity {
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(78),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
         action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
+        action("🎤 Speak a task",this::startSpokenTask);
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.personal(store.activeAll());if(tasks.isEmpty())empty("A little space to breathe","Add your first task above.");else{section(tasks.size()+" to do");showTasks(tasks);}}
     }
+    /** Uses the Android speech-recognition UI; it owns microphone permission. */
+    private void startSpokenTask(){
+        remember();
+        Intent voice=new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        voice.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        voice.putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT,
+                "Say a task and when it should remind you");
+        voice.putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS,3);
+        try{startActivityForResult(voice,REQUEST_SPOKEN_TASK);}
+        catch(android.content.ActivityNotFoundException unavailable){
+            new AlertDialog.Builder(this).setTitle("Speech recognition unavailable")
+                    .setMessage("No Android voice recognition service is available. You can type a task normally, or install and enable an Android speech recognition provider in system settings.")
+                    .setPositiveButton("OK",null).show();
+        }
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request!=REQUEST_SPOKEN_TASK||result!=RESULT_OK||data==null)return;
+        ArrayList<String> alternatives=data.getStringArrayListExtra(
+                android.speech.RecognizerIntent.EXTRA_RESULTS);
+        if(alternatives==null||alternatives.isEmpty())return;
+        String recognized=alternatives.get(0);
+        try{
+            VoiceTaskParser.Draft parsed=VoiceTaskParser.parse(recognized,ZonedDateTime.now());
+            VoiceTaskReview.show(this,parsed,()->{
+                quickDraft="";hideKeyboard();screen=TASKS;render();
+            });
+        }catch(IllegalArgumentException problem){
+            new AlertDialog.Builder(this).setTitle("Couldn't understand the time")
+                    .setMessage(problem.getMessage()+"\\n\\nHeard: "+recognized+
+                            "\\n\\nNothing was saved. Please try again or add the task manually.")
+                    .setPositiveButton("OK",null).show();
+        }
+    }
+
     private void quickAdd(){
         String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
         TaskStore.Task task;
@@ -199,7 +238,7 @@ public final class ShiftActivity extends Activity {
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.6",12);
+        text("PinTask 3.6 · Voice feature preview",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
