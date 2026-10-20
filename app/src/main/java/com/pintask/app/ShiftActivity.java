@@ -94,21 +94,35 @@ public final class ShiftActivity extends Activity {
         microphone.setOnClickListener(v->startVoiceTask());
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
+        action("🎤 Voice language: "+VoiceLanguages.NAMES[VoiceLanguages.selection(this)]+"  ▾",()->chooseVoiceLanguage());
         action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.personal(store.activeAll());if(tasks.isEmpty())empty("A little space to breathe","Add your first task above.");else{section(tasks.size()+" to do");showTasks(tasks);}}
     }
+    private void chooseVoiceLanguage(){
+        new AlertDialog.Builder(this)
+                .setTitle("Voice recognition language")
+                .setSingleChoiceItems(VoiceLanguages.NAMES,VoiceLanguages.selection(this),(dialog,choice)->{
+                    VoiceLanguages.select(this,choice);
+                    dialog.dismiss();
+                    remember();render();
+                })
+                .setNegativeButton("Cancel",null).show();
+    }
+
     private void startVoiceTask(){
         remember();
         Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"en-US");
-        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Tell PinTask what to do and when");
+        String language=VoiceLanguages.language(this);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,language);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,language);
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,VoiceLanguages.prompt(language));
         intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,3);
         try { startActivityForResult(intent,REQUEST_VOICE_TASK); }
         catch(ActivityNotFoundException unavailable){
-            VoiceTaskDialog.editCommand(this,quickDraft,()->{quickDraft="";render();});
+            VoiceTaskDialog.editCommand(this,quickDraft,VoiceLanguages.language(this),()->{quickDraft="";render();});
         }
     }
 
@@ -118,10 +132,10 @@ public final class ShiftActivity extends Activity {
         if(result!=RESULT_OK||data==null)return;
         ArrayList<String> candidates=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
         if(candidates==null||candidates.isEmpty()){
-            VoiceTaskDialog.editCommand(this,quickDraft,()->{quickDraft="";render();});
+            VoiceTaskDialog.editCommand(this,quickDraft,VoiceLanguages.language(this),()->{quickDraft="";render();});
             return;
         }
-        VoiceTaskDialog.editCommand(this,candidates.get(0),()->{quickDraft="";render();});
+        VoiceTaskDialog.editCommand(this,candidates.get(0),VoiceLanguages.language(this),()->{quickDraft="";render();});
     }
 
     private void quickAdd(){
