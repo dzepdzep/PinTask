@@ -124,6 +124,7 @@ public class SpokenTaskTest {
         try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
             TaskStore store=new TaskStore(context)){
             VoiceTaskDialog.editCommand(activity.get(),"Wash dishes tomorrow at 13:00",()->{});
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             AlertDialog transcript=ShadowAlertDialog.getLatestAlertDialog();
             transcript.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
@@ -154,6 +155,7 @@ public class SpokenTaskTest {
         try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
             TaskStore store=new TaskStore(context)){
             VoiceTaskDialog.editCommand(activity.get(),"Water flowers tomorrow at 18:00",()->{});
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             AlertDialog transcript=ShadowAlertDialog.getLatestAlertDialog();
             transcript.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
