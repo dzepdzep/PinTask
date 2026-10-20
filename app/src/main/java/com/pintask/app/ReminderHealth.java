@@ -18,11 +18,13 @@ final class ReminderHealth {
         TaskNotifications.ensureChannel(a);
         boolean notifications=TaskNotifications.canNotify(a);
         boolean channel=TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a));
+        boolean audible=TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a));
         boolean exact=ReminderScheduler.canScheduleExact(a);
         AudioManager audio=a.getSystemService(AudioManager.class);
         int level=audio==null?-1:audio.getStreamVolume(AudioManager.STREAM_ALARM);
         return "Notification permission: "+(notifications?"Allowed":"BLOCKED")+
                 "\nTimed alarm category: "+(channel?"Enabled":"BLOCKED")+
+                "\nAudible alarm channel: "+(audible?"Ready":"SILENT/LOW IMPORTANCE — check category sound")+
                 "\nExact alarm permission: "+(exact?"Enabled":"NOT ALLOWED — alerts can be late")+
                 "\nAlarm volume: "+(level<0?"Unknown":level==0?"MUTED":"Level "+level)+
                 "\n\nAndroid Do Not Disturb, silent modes and the phone maker's battery controls may still restrict sounds. " +
@@ -54,10 +56,10 @@ final class ReminderHealth {
 
     static void warnWhenBlocked(Activity a) {
         if(!TaskNotifications.canNotify(a) ||
-                !TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+                !TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             new AlertDialog.Builder(a).setTitle("Your task alarm may be silent")
-                    .setMessage("Android notifications or the Timed task alarms category are disabled. The task is saved, but the alarm cannot sound until notifications are enabled.")
-                    .setNegativeButton("Later",null).setPositiveButton("Fix notifications",(d,i)->openNotifications(a)).show();
+                    .setMessage("Android notifications may be blocked, or the active Timed task alarms category may be silent or low importance. The task is saved, but it may not make a sound until you fix its notification category settings.")
+                    .setNegativeButton("Later",null).setPositiveButton("Fix alarm channel",(d,i)->openAlarmChannel(a)).show();
         } else if(!ReminderScheduler.canScheduleExact(a)) {
             new AlertDialog.Builder(a).setTitle("Your timed reminder could arrive late")
                     .setMessage("Exact alarm access is disabled. PinTask saved this task with an inexact fallback, which Android may delay. Allow Alarms & reminders for the intended time.")
@@ -66,7 +68,7 @@ final class ReminderHealth {
     }
 
     private static void immediateTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+        if(!TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
@@ -78,7 +80,7 @@ final class ReminderHealth {
     }
 
     private static void delayedTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+        if(!TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
@@ -124,6 +126,15 @@ final class ReminderHealth {
         try {
             a.startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+a.getPackageName())));
         } catch(Exception unavailable) {openAppSettings(a);}
+    }
+
+    private static void openAlarmChannel(Activity a) {
+        try {
+            Intent i = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+            i.putExtra(Settings.EXTRA_APP_PACKAGE, a.getPackageName());
+            i.putExtra(Settings.EXTRA_CHANNEL_ID, TaskNotifications.activeReminderChannel(a));
+            a.startActivity(i);
+        } catch (Exception unavailable) { openNotifications(a); }
     }
 
     private static void openNotifications(Activity a) {
