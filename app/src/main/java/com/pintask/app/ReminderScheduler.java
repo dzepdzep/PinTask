@@ -8,7 +8,21 @@ import android.os.Build;
 
 /** Exact reminders when permitted, with an inexact fallback. */
 public final class ReminderScheduler {
+    private static final String ALARM_CLOCK_PREF = "alarm_clock_priority_v38";
     private ReminderScheduler() {}
+
+    /** Opt-in: alarm-clock-class precision is more intrusive and uses more battery. */
+    static boolean alarmClockPriority(Context context) {
+        return context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .getBoolean(ALARM_CLOCK_PREF, false);
+    }
+
+    static void setAlarmClockPriority(Context context, boolean enabled) {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .edit().putBoolean(ALARM_CLOCK_PREF, enabled).commit();
+        // Replaces each existing PendingIntent alarm in-place; task data is intact.
+        rescheduleAll(context);
+    }
 
     public static boolean canScheduleExact(Context context) {
         AlarmManager manager = context.getSystemService(AlarmManager.class);
@@ -40,14 +54,27 @@ public final class ReminderScheduler {
         boolean exactPermitted = canScheduleExact(context);
         if (exactPermitted) {
             try {
-                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
-                ReminderAudit.note(context, "scheduled_exact", task.id, notifyAt);
+                if (alarmClockPriority(context)) {
+                    // Android treats these as alarm-clock events: wakes from deep
+                    // idle for the user-selected time instead of deferring the
+                    // reminder like a normal while-idle alarm.
+                    Intent open = TaskSections.openIntent(context, task.id);
+                    PendingIntent show = PendingIntent.getActivity(context, (int)task.id, open,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    manager.setAlarmClock(new AlarmManager.AlarmClockInfo(notifyAt, show), pending);
+                    ReminderAudit.note(context, "scheduled_alarm_clock", task.id, notifyAt);
+                } else {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
+                    ReminderAudit.note(context, "scheduled_exact", task.id, notifyAt);
+                }
                 return;
             } catch (SecurityException denied) {
                 // A permission may have been revoked between checking and scheduling.
                 ReminderAudit.note(context, "exact_permission_revoked", task.id, notifyAt);
             }
         }
+        if (alarmClockPriority(context))
+            ReminderAudit.note(context, "alarm_clock_permission_missing", task.id, notifyAt);
         try {
             manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
             ReminderAudit.note(context, "scheduled_inexact", task.id, notifyAt);
