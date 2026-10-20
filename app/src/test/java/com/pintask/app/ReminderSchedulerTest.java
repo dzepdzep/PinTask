@@ -19,6 +19,7 @@ public class ReminderSchedulerTest {
         context=RuntimeEnvironment.getApplication();
         context.deleteDatabase("pintask.db");
         context.getSharedPreferences("settings",0).edit().clear().commit();
+        context.getSharedPreferences("reminder_diagnostics_v36",0).edit().clear().commit();
         store=new TaskStore(context);
         alarms=context.getSystemService(AlarmManager.class);
         notifications=context.getSystemService(NotificationManager.class);
@@ -124,6 +125,44 @@ public class ReminderSchedulerTest {
         } finally {db.endTransaction();}
         ReminderScheduler.rescheduleAll(context);
         assertEquals(1001,Shadows.shadowOf(alarms).getScheduledAlarms().size());
+    }
+
+    @Test public void silentOrLowImportanceChannelIsNotReportedAudible() {
+        TaskNotifications.ensureChannel(context);
+        String id=TaskNotifications.activeReminderChannel(context);
+        assertTrue(TaskNotifications.canAlertAudibly(context,id));
+        notifications.deleteNotificationChannel(id);
+        NotificationChannel quiet=new NotificationChannel(id,"Muted",NotificationManager.IMPORTANCE_LOW);
+        quiet.setSound(null,null);
+        notifications.createNotificationChannel(quiet);
+        assertTrue(TaskNotifications.canNotifyChannel(context,id));
+        assertFalse(TaskNotifications.canAlertAudibly(context,id));
+        assertEquals(StartupAccess.ALARM_CHANNEL,StartupAccess.nextRequired(context));
+    }
+
+    @Test public void syncDoesNotPrePostAndSilenceAnOverdueFirstAlarm() {
+        TaskStore.Task task=store.add("Overdue alarm",1,System.currentTimeMillis()-2000,0,0);
+        TaskNotifications.syncAll(context);
+        assertEquals(0,notifications.getActiveNotifications().length);
+        ReminderScheduler.rescheduleAll(context);
+        assertNotNull(Shadows.shadowOf(notifications).getNotification((int)task.id));
+        assertTrue(store.find(task.id).remindedAt>0);
+        assertTrue(ReminderAudit.summary(context).contains("delivered_reschedule_overdue"));
+    }
+
+    @Test public void scheduleAuditIncludesOneTimeReminders() {
+        TaskStore.Task task=store.add("One time",1,System.currentTimeMillis()+600_000,0,0);
+        ReminderScheduler.schedule(context,task);
+        String report=ReminderAudit.summary(context);
+        assertTrue(report,report.contains("scheduled_exact #"+task.id));
+    }
+
+    @Test public void auditSeparatesLateAlarmCallbackFromRecovery() {
+        TaskStore.Task task=store.add("Late",1,System.currentTimeMillis()-300_000,0,0);
+        ReminderScheduler.deliverDue(context,"alarm");
+        String report=ReminderAudit.summary(context);
+        assertTrue(report.contains("late_delivery_alarm #"+task.id));
+        assertFalse(report.contains("recovered_by_alarm #"+task.id));
     }
 
     @Test @Config(sdk=31) public void deniedExactAccessKeepsInexactAlarm() {
