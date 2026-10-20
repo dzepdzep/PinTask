@@ -58,6 +58,7 @@ public class VoiceLanguagesTest {
     @Test public void germanDailyRoutineAndNextWeekday(){
         SpokenTask daily=VoiceLanguages.parse("Medikamente jeden Tag um 13 Uhr",NOW,"de-DE");
         assertEquals(TaskStore.REPEAT_DAILY,daily.repeatCode);
+        assertEquals("Müll next Friday at 08:00 rausbringen",VoiceLanguages.normalize("Müll am Freitag um 08:00 rausbringen","de-DE"));
         SpokenTask date=VoiceLanguages.parse("Müll am Freitag um 08:00 rausbringen",NOW,"de-DE");
         assertEquals("Müll rausbringen",date.title);
         assertEquals(ZonedDateTime.of(2026,10,23,8,0,0,0,BERLIN).toInstant().toEpochMilli(),date.dueAt);
