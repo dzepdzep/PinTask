@@ -31,7 +31,7 @@ public final class ReminderWatchdog extends JobService {
 
     static void check(Context context) {
         ReminderAudit.note(context,"watchdog_check",0,0);
-        ReminderScheduler.deliverDue(context);
+        ReminderScheduler.deliverDue(context, "watchdog");
         ReminderScheduler.rescheduleAll(context);
         TaskNotifications.syncAll(context);
     }
