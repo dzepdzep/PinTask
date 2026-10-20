@@ -93,6 +93,49 @@ public class VoiceReviewModelTest {
                 draft.validatedDueAt(now.toInstant().toEpochMilli()));
     }
 
+    @Test public void spokenFifteenMinutesEarlyHasDifferentDueAndAlarmTimes(){
+        SpokenTask parsed=SpokenTask.parse("Wash dishes tomorrow at 13:00 15 minutes before",NOW);
+        VoiceReviewModel draft=new VoiceReviewModel(parsed,BERLIN);
+        assertEquals(15,draft.notifyBeforeMinutes());
+        assertEquals("15 minutes before",draft.advanceLabel());
+        assertTrue(draft.preview().contains("Task due:"));
+        assertTrue(draft.alarmLabel().contains("12:45"));
+        assertEquals(parsed.dueAt,draft.validatedDueAt(NOW.toInstant().toEpochMilli()));
+    }
+    @Test public void manualAdvanceCorrectionChangesOnlyTheAlarmTime(){
+        SpokenTask parsed=SpokenTask.parse("Wash dishes tomorrow at 13",NOW);
+        VoiceReviewModel draft=new VoiceReviewModel(parsed,BERLIN);
+        assertEquals("At task time",draft.advanceLabel());
+        draft.changeAdvance(5);assertTrue(draft.alarmLabel().contains("12:55"));
+        draft.changeAdvance(10);assertTrue(draft.alarmLabel().contains("12:50"));
+        draft.changeAdvance(15);assertTrue(draft.alarmLabel().contains("12:45"));
+        draft.changeAdvance(30);assertTrue(draft.alarmLabel().contains("12:30"));
+        draft.changeAdvance(90);assertTrue(draft.alarmLabel().contains("11:30"));
+        assertEquals(90,draft.notifyBeforeMinutes());
+        assertEquals(parsed.dueAt,draft.validatedDueAt(NOW.toInstant().toEpochMilli()));
+        draft.changeAdvance(0);assertTrue(draft.alarmLabel().contains("13:00"));
+        assertEquals("At task time",draft.advanceLabel());
+    }
+    @Test public void advanceCanShiftAlarmToPreviousCalendarDay(){
+        SpokenTask parsed=SpokenTask.parse("Take medication tomorrow at 00:15",NOW);
+        VoiceReviewModel draft=new VoiceReviewModel(parsed,BERLIN);
+        draft.changeAdvance(30);
+        assertTrue(draft.alarmLabel().contains("20 Oct"));
+        assertTrue(draft.alarmLabel().contains("23:45"));
+    }
+    @Test public void customAdvanceRangeAndPastAlarmValidation(){
+        SpokenTask parsed=SpokenTask.parse("Wash dishes today at 13",NOW);
+        VoiceReviewModel draft=new VoiceReviewModel(parsed,BERLIN);
+        assertThrows(IllegalArgumentException.class,()->draft.changeAdvance(-1));
+        assertThrows(IllegalArgumentException.class,()->draft.changeAdvance(1441));
+        draft.changeAdvance(120);
+        assertThrows(IllegalArgumentException.class,()->draft.validatedDueAt(NOW.toInstant().toEpochMilli()));
+        draft.changeAdvance(15);
+        assertEquals(parsed.dueAt,draft.validatedDueAt(NOW.toInstant().toEpochMilli()));
+        draft.changeTime(LocalTime.of(12,0),NOW.toLocalDate());
+        assertTrue(draft.alarmLabel().contains("11:45"));
+    }
+
     @Test public void daylightSavingNonexistentLocalTimeIsRejected(){
         VoiceReviewModel draft=new VoiceReviewModel(
                 SpokenTask.parse("Take vitamins tomorrow at 10",NOW),BERLIN);
