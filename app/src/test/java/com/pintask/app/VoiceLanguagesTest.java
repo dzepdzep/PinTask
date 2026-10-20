@@ -131,6 +131,46 @@ public class VoiceLanguagesTest {
         }
     }
 
+    @Test public void microphoneCanSwitchAllThreeLanguagesWithOneTapEachTime(){
+        try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
+            TaskStore store=new TaskStore(context)){
+            for(int choice:new int[]{1,2,0}){
+                View microphone=findDescription(activity.get().getWindow().getDecorView(),"Speak a task");
+                assertNotNull(microphone);
+                microphone.performClick();
+                AlertDialog picker=ShadowAlertDialog.getLatestAlertDialog();
+                assertNotNull(picker);
+                assertEquals("Picking a language never saves a task",0,store.activeAll().size());
+                View language=findDescription(picker.getWindow().getDecorView(),
+                        "Speak in "+VoiceLanguages.NAMES[choice]);
+                assertNotNull(language);
+                language.performClick();
+                assertEquals(VoiceLanguages.TAGS[choice],VoiceLanguages.language(activity.get()));
+                Intent started=Shadows.shadowOf(activity.get()).getNextStartedActivity();
+                assertNotNull(started);
+                assertEquals(RecognizerIntent.ACTION_RECOGNIZE_SPEECH,started.getAction());
+                assertEquals(VoiceLanguages.TAGS[choice],
+                        started.getStringExtra(RecognizerIntent.EXTRA_LANGUAGE));
+                View updated=findDescription(activity.get().getWindow().getDecorView(),"Speak a task");
+                assertEquals("🎤 "+VoiceLanguages.SHORT[choice],
+                        ((android.widget.Button)updated).getText().toString());
+            }
+            assertEquals(0,store.activeAll().size());
+        }
+    }
+
+    @Test public void cancelLanguagePickerStartsNoRecording(){
+        try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup()){
+            int previous=VoiceLanguages.selection(activity.get());
+            View microphone=findDescription(activity.get().getWindow().getDecorView(),"Speak a task");
+            microphone.performClick();
+            AlertDialog picker=ShadowAlertDialog.getLatestAlertDialog();
+            picker.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+            assertNull(Shadows.shadowOf(activity.get()).getNextStartedActivity());
+            assertEquals(previous,VoiceLanguages.selection(activity.get()));
+        }
+    }
+
     private static View findText(View view,String value) {
         if(view instanceof TextView&&value.equals(((TextView)view).getText().toString()))return view;
         if(view instanceof ViewGroup)for(int i=0;i<((ViewGroup)view).getChildCount();i++){
