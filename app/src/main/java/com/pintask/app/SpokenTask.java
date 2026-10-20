@@ -38,7 +38,7 @@ final class SpokenTask {
         "\\bin\\s+(\\d+(?:[.,]\\d+)?)\\s*(hours?|hrs?|h|minutes?|mins?|m)\\b",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern BEFORE=Pattern.compile(
-        "\\b(?:(\\d{1,4})\\s*(minutes?|mins?|m|hours?|hrs?|h)|half\\s+(?:an?\\s+)?hour)\\s+(?:before(?:hand)?|earlier|early|in\\s+advance)\\b",
+        "\\b(?:(\\d{1,4}|one|five|ten|fifteen|twenty|thirty|forty|sixty)\\s*(minutes?|mins?|m|hours?|hrs?|h)|half\\s+(?:an?\\s+)?hour)\\s+(?:before(?:hand)?|earlier|early|in\\s+advance)\\b",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern LEAD=Pattern.compile(
         "^(?:please\\s+)?(?:remind\\s+me\\s+to|i\\s+need\\s+to|i\\s+have\\s+to|"+
@@ -57,7 +57,19 @@ final class SpokenTask {
             String unit=before.group(2);
             if(unit==null) early=30;
             else {
-                int n=Integer.parseInt(before.group(1));
+                String count=before.group(1).toLowerCase(Locale.ROOT);
+                int n;
+                switch(count){
+                    case "one":n=1;break;
+                    case "five":n=5;break;
+                    case "ten":n=10;break;
+                    case "fifteen":n=15;break;
+                    case "twenty":n=20;break;
+                    case "thirty":n=30;break;
+                    case "forty":n=40;break;
+                    case "sixty":n=60;break;
+                    default:n=Integer.parseInt(count);
+                }
                 early=n*(unit.toLowerCase(Locale.ROOT).startsWith("h")?60:1);
             }
             if(early<1||early>1440)
