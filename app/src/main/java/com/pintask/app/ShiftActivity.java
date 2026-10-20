@@ -3,6 +3,8 @@ package com.pintask.app;
 import android.Manifest;
 import android.app.*;
 import android.content.Intent;
+import android.speech.RecognizerIntent;
+import android.content.ActivityNotFoundException;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -16,6 +18,7 @@ import java.util.*;
 /** Three destinations: everyday Tasks, Work, and advanced More. */
 public final class ShiftActivity extends Activity {
     private static final int TASKS=0, WORK=1, MORE=2, EDITOR=3, HISTORY=4, PLAN=5;
+    private static final int REQUEST_VOICE_TASK=93;
     private static final int BG=Color.rgb(12,18,30),SURFACE=Color.rgb(24,34,51),BORDER=Color.rgb(43,57,76);
     private static final int FG=Color.rgb(238,244,251),MUTED=Color.rgb(156,173,194),ACCENT=Color.rgb(166,233,205);
     private static final int[] EARLY={-2,0,5,10,15,30,60},INTERVALS={0,30,60,120,180,240};
@@ -85,13 +88,42 @@ public final class ShiftActivity extends Activity {
         heading("Tasks","Your everyday to-do list");
         LinearLayout compose=card();LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);compose.addView(row);
         quickEntry=new EditText(this);quickEntry.setSingleLine(true);quickEntry.setText(quickDraft);quickEntry.setHint("What needs doing?");quickEntry.setTextColor(FG);quickEntry.setHintTextColor(MUTED);quickEntry.setTextSize(16);quickEntry.setBackgroundColor(Color.TRANSPARENT);quickEntry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)});row.addView(quickEntry,new LinearLayout.LayoutParams(0,dp(52),1));
-        Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(78),dp(48)));add.setOnClickListener(v->quickAdd());
+        Button microphone=button("🎤",false);
+        microphone.setContentDescription("Speak a task");
+        row.addView(microphone,new LinearLayout.LayoutParams(dp(54),dp(48)));
+        microphone.setOnClickListener(v->startVoiceTask());
+        Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
         action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.personal(store.activeAll());if(tasks.isEmpty())empty("A little space to breathe","Add your first task above.");else{section(tasks.size()+" to do");showTasks(tasks);}}
     }
+    private void startVoiceTask(){
+        remember();
+        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,"en-US");
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,"Tell PinTask what to do and when");
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,3);
+        try { startActivityForResult(intent,REQUEST_VOICE_TASK); }
+        catch(ActivityNotFoundException unavailable){
+            VoiceTaskDialog.editCommand(this,quickDraft,()->{quickDraft="";render();});
+        }
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request!=REQUEST_VOICE_TASK)return;
+        if(result!=RESULT_OK||data==null)return;
+        ArrayList<String> candidates=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if(candidates==null||candidates.isEmpty()){
+            VoiceTaskDialog.editCommand(this,quickDraft,()->{quickDraft="";render();});
+            return;
+        }
+        VoiceTaskDialog.editCommand(this,candidates.get(0),()->{quickDraft="";render();});
+    }
+
     private void quickAdd(){
         String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
         TaskStore.Task task;
@@ -199,7 +231,7 @@ public final class ShiftActivity extends Activity {
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.6",12);
+        text("PinTask 3.7",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
