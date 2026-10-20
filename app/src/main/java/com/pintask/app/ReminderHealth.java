@@ -17,7 +17,7 @@ final class ReminderHealth {
     static String status(Activity a) {
         TaskNotifications.ensureChannel(a);
         boolean notifications=TaskNotifications.canNotify(a);
-        boolean channel=TaskNotifications.canNotifyChannel(a,TaskNotifications.REMINDER_CHANNEL);
+        boolean channel=TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a));
         boolean exact=ReminderScheduler.canScheduleExact(a);
         AudioManager audio=a.getSystemService(AudioManager.class);
         int level=audio==null?-1:audio.getStreamVolume(AudioManager.STREAM_ALARM);
@@ -54,7 +54,7 @@ final class ReminderHealth {
 
     static void warnWhenBlocked(Activity a) {
         if(!TaskNotifications.canNotify(a) ||
-                !TaskNotifications.canNotifyChannel(a,TaskNotifications.REMINDER_CHANNEL)) {
+                !TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
             new AlertDialog.Builder(a).setTitle("Your task alarm may be silent")
                     .setMessage("Android notifications or the Timed task alarms category are disabled. The task is saved, but the alarm cannot sound until notifications are enabled.")
                     .setNegativeButton("Later",null).setPositiveButton("Fix notifications",(d,i)->openNotifications(a)).show();
@@ -66,7 +66,7 @@ final class ReminderHealth {
     }
 
     private static void immediateTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.REMINDER_CHANNEL)) {
+        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
@@ -78,7 +78,7 @@ final class ReminderHealth {
     }
 
     private static void delayedTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.REMINDER_CHANNEL)) {
+        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
