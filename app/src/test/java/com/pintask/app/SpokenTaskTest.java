@@ -102,10 +102,12 @@ public class SpokenTaskTest {
         try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
             TaskStore store=new TaskStore(context)){
             VoiceTaskDialog.editCommand(activity.get(),"Remind me to buy milk",()->{});
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             AlertDialog transcript=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(transcript);
             assertEquals(0,store.activeAll().size());
             transcript.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             assertEquals(0,store.activeAll().size());
             AlertDialog preview=ShadowAlertDialog.getLatestAlertDialog();
             assertNotSame(transcript,preview);
