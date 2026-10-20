@@ -51,6 +51,7 @@ final class VoiceLanguages {
             s=replace(s,"\\b(?:jeden|jede)\\s+zweiten\\b","every other");
             s=replace(s,"\\balle\\s+(?:zwei|2)\\s+wochen\\b","every two weeks");
             s=replace(s,"\\b(?:jeden|jede|jedem|jede[nrsm]?)\\b","every");
+            s=replace(s,"\\bam\\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\\b","next $1");
             s=replace(s,"\\b(?:alle\\s+)?(\\d{1,2})\\s+stunden\\b","every $1 hours");
             s=replace(s,"\\b(?:täglich|taeglich)\\b","every day");
             s=replace(s,"\\b(?:heute)\\b","today");
@@ -69,8 +70,8 @@ final class VoiceLanguages {
             s=replace(s,"\\b(\\d{1,3}|[\\p{L}ß]+)\\s+(?:stunden?)\\s+(?:vorher|früher|davor)\\b", m->numeral(m.group(1),"de-DE")+" hours before");
             s=replace(s,"\\bin\\s+(\\d{1,4}|[\\p{L}ß]+)\\s+(?:minuten?|mins?)\\b",m->"in "+numeral(m.group(1),"de-DE")+" minutes");
             s=replace(s,"\\bin\\s+(\\d{1,3}|[\\p{L}ß]+)\\s+(?:stunden?)\\b",m->"in "+numeral(m.group(1),"de-DE")+" hours");
-            s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*(?:uhr)?\\b",m->"at "+numeral(m.group(1),"de-DE")+(m.group(2)==null?"":m.group(2)));
-            s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*$",m->"at "+numeral(m.group(1),"de-DE")+(m.group(2)==null?"":m.group(2)));
+            s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*(?:uhr)?\\b",m->clock(m,"de-DE"));
+            s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*$",m->clock(m,"de-DE"));
         } else {
             s=replace(s,"^(?:molim\\s+te\\s+)?(?:podsjeti\\s+me\\s+(?:da\\s+)?|podsjeti\\s+me\\s+|moram\\s+|trebam\\s+|treba\\s+mi\\s+)","");
             s=replace(s,"\\bpola\\s+sata\\s+(?:prije|ranije)\\b","half an hour before");
@@ -89,18 +90,27 @@ final class VoiceLanguages {
             s=replace(s,"\\b(?:petkom|petka|petak)\\b","Friday");
             s=replace(s,"\\b(?:subotom|subote|subota)\\b","Saturday");
             s=replace(s,"\\b(?:nedjeljom|nedjelje|nedjelja)\\b","Sunday");
+            s=replace(s,"\\bu\\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\\b","next $1");
+            s=replace(s,"\\bevery\\s+(\\d{1,2}|[\\p{L}]+)\\s+(?:sata|sati)\\b",
+                    m->"every "+numeral(m.group(1),"hr-HR")+" hours");
             s=replace(s,"\\b(?:dan)\\b","day");
             s=replace(s,"\\b(?:sat)\\b","hour");
             s=replace(s,"\\b(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\s+(?:prije|ranije)\\b",m->numeral(m.group(1),"hr-HR")+" minutes before");
             s=replace(s,"\\b(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\s+(?:prije|ranije)\\b",m->numeral(m.group(1),"hr-HR")+" hours before");
             s=replace(s,"\\bza\\s+(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" minutes");
             s=replace(s,"\\bza\\s+(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" hours");
-            s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*(?:sati|sat)?\\b",m->"at "+numeral(m.group(1),"hr-HR")+(m.group(2)==null?"":m.group(2)));
-            s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*$",m->"at "+numeral(m.group(1),"hr-HR")+(m.group(2)==null?"":m.group(2)));
+            s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*(?:sati|sat)?\\b",m->clock(m,"hr-HR"));
+            s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*$",m->clock(m,"hr-HR"));
         }
         return s.replaceAll("\\s+"," ").trim();
     }
 
+    private static String clock(Matcher matcher,String language){
+        String number=numeral(matcher.group(1),language);
+        // Do not reinterpret ordinary nouns after 'um' or 'u' as clock numbers.
+        if(!number.matches("\\d+"))return matcher.group();
+        return "at "+number+(matcher.group(2)==null?"":matcher.group(2));
+    }
     private static String numeral(String text,String lang){
         String n=text.toLowerCase(Locale.ROOT);
         if(n.matches("\\d+"))return n;
