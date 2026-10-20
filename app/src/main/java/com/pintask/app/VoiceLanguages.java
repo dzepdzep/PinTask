@@ -58,11 +58,11 @@ final class VoiceLanguages {
             s=replace(s,"\\b(?:morgen)\\b","tomorrow");
             s=replace(s,"\\b(?:nächsten|naechsten|nächste|kommenden)\\s+(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\\b","next $1");
             s=replace(s,"\\b(?:montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?)\\b", match->{
-                String n=match.toLowerCase(Locale.ROOT).replaceAll("s$","");
+                String n=match.group().toLowerCase(Locale.ROOT).replaceAll("s$","");
                 switch(n){case "montag":return "Monday";case "dienstag":return "Tuesday";
                     case "mittwoch":return "Wednesday";case "donnerstag":return "Thursday";
                     case "freitag":return "Friday";case "samstag":return "Saturday";
-                    case "sonntag":return "Sunday";default:return match;}
+                    case "sonntag":return "Sunday";default:return match.group();}
             });
             s=replace(s,"\\b(?:tag)\\b","day");
             s=replace(s,"\\b(?:stunde)\\b","hour");
@@ -146,11 +146,7 @@ final class VoiceLanguages {
         return Pattern.compile(pattern,Pattern.CASE_INSENSITIVE|Pattern.UNICODE_CASE)
                 .matcher(s).replaceAll(output);
     }
-    private interface WordTransform{String apply(String match);}
     private interface GroupTransform{String apply(Matcher match);}
-    private static String replace(String s,String pattern,WordTransform action){
-        return replace(s,pattern,match->action.apply(match.group()),true);
-    }
     private static String replace(String s,String pattern,GroupTransform action){
         return replace(s,pattern,action,true);
     }
