@@ -18,11 +18,13 @@ final class ReminderHealth {
         TaskNotifications.ensureChannel(a);
         boolean notifications=TaskNotifications.canNotify(a);
         boolean channel=TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a));
+        boolean audible=TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a));
         boolean exact=ReminderScheduler.canScheduleExact(a);
         AudioManager audio=a.getSystemService(AudioManager.class);
         int level=audio==null?-1:audio.getStreamVolume(AudioManager.STREAM_ALARM);
         return "Notification permission: "+(notifications?"Allowed":"BLOCKED")+
                 "\nTimed alarm category: "+(channel?"Enabled":"BLOCKED")+
+                "\nAudible alarm channel: "+(audible?"Ready":"SILENT/LOW IMPORTANCE — check category sound")+
                 "\nExact alarm permission: "+(exact?"Enabled":"NOT ALLOWED — alerts can be late")+
                 "\nAlarm volume: "+(level<0?"Unknown":level==0?"MUTED":"Level "+level)+
                 "\n\nAndroid Do Not Disturb, silent modes and the phone maker's battery controls may still restrict sounds. " +
@@ -54,9 +56,9 @@ final class ReminderHealth {
 
     static void warnWhenBlocked(Activity a) {
         if(!TaskNotifications.canNotify(a) ||
-                !TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+                !TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             new AlertDialog.Builder(a).setTitle("Your task alarm may be silent")
-                    .setMessage("Android notifications or the Timed task alarms category are disabled. The task is saved, but the alarm cannot sound until notifications are enabled.")
+                    .setMessage("Android notifications may be blocked, or the active Timed task alarms category may be silent or low importance. The task is saved, but it may not make a sound until you fix its notification category settings.")
                     .setNegativeButton("Later",null).setPositiveButton("Fix notifications",(d,i)->openNotifications(a)).show();
         } else if(!ReminderScheduler.canScheduleExact(a)) {
             new AlertDialog.Builder(a).setTitle("Your timed reminder could arrive late")
@@ -66,7 +68,7 @@ final class ReminderHealth {
     }
 
     private static void immediateTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+        if(!TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
@@ -78,7 +80,7 @@ final class ReminderHealth {
     }
 
     private static void delayedTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+        if(!TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
