@@ -44,8 +44,11 @@ final class VoiceTaskParser {
         boolean scheduled=false;
         int repeat=TaskStore.REPEAT_NEVER;
         String note="";
+        boolean weekdayMentioned=false;
+        boolean explicitDay=false;
         Matcher match=DAY.matcher(text);
         if(match.find()){
+            weekdayMentioned=true;
             DayOfWeek weekday=weekday(match.group(2));
             String prefix=match.group(1)==null?"":match.group(1);
             if(prefix.equals("every other")||prefix.equals("jeden zweiten"))
@@ -61,14 +64,17 @@ final class VoiceTaskParser {
 
         boolean dayAfter=contains(text,"day after tomorrow")||contains(text,"übermorgen");
         if(dayAfter){
+            explicitDay=true;
             day=now.toLocalDate().plusDays(2);
             text=text.replaceAll("\\b(day after tomorrow|übermorgen)\\b"," ");
             scheduled=true;
         }else if(contains(text,"tomorrow")||contains(text,"morgen")){
+            explicitDay=true;
             day=now.toLocalDate().plusDays(1);
             text=text.replaceAll("\\b(tomorrow|morgen)\\b"," ");
             scheduled=true;
         }else if(contains(text,"today")||contains(text,"heute")){
+            explicitDay=true;
             day=now.toLocalDate();
             text=text.replaceAll("\\b(today|heute)\\b"," ");
             scheduled=true;
@@ -128,6 +134,14 @@ final class VoiceTaskParser {
         if(!scheduled && text.matches(".*\\b(next|every|repeat|weekly|hourly|tuesday|wednesday|thursday|friday|monday|saturday|sunday|tonight|later|nächste|jeden|alle|uhr)\\b.*")){
             scheduled=true;
             note="Some scheduling words were not understood. Choose the correct date, time and repeat in the review.";
+        }
+
+        // For an ongoing schedule, the first alarm is the next matching date,
+        // never a time already passed today. Explicit "today" is not changed.
+        if(time!=null && !explicitDay && day.equals(now.toLocalDate()) &&
+                !day.atTime(time).isAfter(now.toLocalDateTime()) &&
+                (weekdayMentioned || repeat==TaskStore.REPEAT_DAILY)) {
+            day=day.plusDays(weekdayMentioned?7:1);
         }
 
         String title=text.replaceAll(
