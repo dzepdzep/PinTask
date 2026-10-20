@@ -269,7 +269,8 @@ public final class ShiftActivity extends Activity {
         tool("Reminder pop-up banners",TaskNotifications.popupEnabled(this)?
                 "On · Show WhatsApp-style heads-up alerts for due tasks":"Off · Sound and status-bar icon without pop-up",this::popupSettings);
         tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
-        tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
+        tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Exact-alarm permission granted · Android may still defer during deep sleep":"Permission missing · Android may delay reminders",this::reminderTimingSettings);
+        tool("Alarm-clock priority",ReminderScheduler.alarmClockPriority(this)?"On · stronger wake-up scheduling for timed tasks":"Off · optional stronger scheduling for timed tasks",this::alarmPrioritySettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
         text("PinTask 3.7",12);
@@ -485,6 +486,24 @@ public final class ShiftActivity extends Activity {
         }
         remember();hideKeyboard();tour.set(ShiftGuide.TIME);render();
     }
+    private void alarmPrioritySettings() {
+        new AlertDialog.Builder(this)
+                .setTitle("Alarm-clock priority")
+                .setMessage("For tasks you expect at a specific minute (including early reminders), Android's alarm-clock scheduler can wake the phone from deep idle. This makes alarms more visible to Android, may show an upcoming-alarm indicator and uses more battery. It does NOT force a ringtone: check Timed task alarms sound and alarm volume separately. Requires Alarms & reminders access. The setting affects upcoming timed alerts without changing task times.")
+                .setPositiveButton("Enable",(d,which)->{
+                    if(!ReminderScheduler.canScheduleExact(this)){
+                        toast("First allow Alarms & reminders, then enable alarm-clock priority.");
+                        reminderTimingSettings();return;
+                    }
+                    ReminderScheduler.setAlarmClockPriority(this,true);
+                    render();
+                })
+                .setNeutralButton("Disable",(d,which)->{
+                    ReminderScheduler.setAlarmClockPriority(this,false);render();
+                })
+                .setNegativeButton("Cancel",null).show();
+    }
+
     private void reminderTimingSettings() {
         AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle("Reminder timing")
                 .setMessage("Allow alarms and reminders so timed tasks can arrive close to their chosen time, including while the phone is asleep. Without access, Android may delay them.")
