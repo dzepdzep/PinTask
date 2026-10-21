@@ -43,8 +43,8 @@ public class TimedAlarmUiTest {
             chooseTomorrow(controller.get());
             root=controller.get().getWindow().getDecorView();
             find(root,"Time · Optional").performClick();
-            TimePickerDialog picker=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
-            picker.updateTime(10,0);
+            AlertDialog picker=ShadowAlertDialog.getLatestAlertDialog();
+            setClockWheels(picker,10,0);
             picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             root=controller.get().getWindow().getDecorView();
@@ -67,8 +67,8 @@ public class TimedAlarmUiTest {
             entry(controller.get().getWindow().getDecorView()).setText("Intentionally silent");
             chooseTomorrow(controller.get());
             find(controller.get().getWindow().getDecorView(),"Time · Optional").performClick();
-            TimePickerDialog picker=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
-            picker.updateTime(11,0);
+            AlertDialog picker=ShadowAlertDialog.getLatestAlertDialog();
+            setClockWheels(picker,11,0);
             picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             find(controller.get().getWindow().getDecorView(),"More options").performClick();
@@ -79,6 +79,22 @@ public class TimedAlarmUiTest {
         }
     }
 
+    private static void setClockWheels(AlertDialog dialog,int h,int m){
+        android.widget.NumberPicker hours=findWheel(dialog.getWindow().getDecorView(),"Clock hour");
+        android.widget.NumberPicker minutes=findWheel(dialog.getWindow().getDecorView(),"Clock minute");
+        assertNotNull(hours);assertNotNull(minutes);
+        hours.setValue(h);minutes.setValue(m);
+    }
+    private static android.widget.NumberPicker findWheel(View root,String description){
+        if(root instanceof android.widget.NumberPicker &&
+                description.equals(String.valueOf(root.getContentDescription())))
+            return (android.widget.NumberPicker)root;
+        if(root instanceof ViewGroup)for(int i=0;i<((ViewGroup)root).getChildCount();i++){
+            android.widget.NumberPicker found=findWheel(((ViewGroup)root).getChildAt(i),description);
+            if(found!=null)return found;
+        }
+        return null;
+    }
     private void chooseTomorrow(ShiftActivity a){
         find(a.getWindow().getDecorView(),"Change date").performClick();
         DatePickerDialog pick=(DatePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
