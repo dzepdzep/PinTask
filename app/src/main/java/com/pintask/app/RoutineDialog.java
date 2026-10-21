@@ -167,8 +167,7 @@ final class RoutineDialog {
     }
 
     private static void time(Activity a,int initial,IntConsumer chosen){
-        new TimePickerDialog(a,(picker,h,m)->chosen.accept(h*60+m),
-                initial/60,initial%60,true).show();
+        FlexibleTimePicker.clock(a,initial,chosen);
     }
 
     private static void refreshTimes(Activity activity,LinearLayout times,List<Integer> minutes,
