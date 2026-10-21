@@ -24,6 +24,11 @@ final class SpokenTask {
         this.schedule=schedule;this.isTimed=dueAt>0;
     }
 
+    /** A shared message is parsed independently of voice language or speech grammar. */
+    static SpokenTask imported(String title,long dueAt,String source) {
+        return new SpokenTask(title,dueAt,0,0,source,"Shared message · Review before saving");
+    }
+
     /** Keep the original localized transcript visible after schedule normalization. */
     SpokenTask withOriginal(String heard) {
         return new SpokenTask(title,dueAt,repeatCode,remindBeforeMinutes,heard,schedule);
