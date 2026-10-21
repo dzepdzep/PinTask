@@ -329,7 +329,6 @@ public final class TaskNotifications {
                 .setContentIntent(open(context))
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
-                .setSilent(true)
                 .setShowWhen(false)
                 .setCategory(Notification.CATEGORY_STATUS)
                 .build();
