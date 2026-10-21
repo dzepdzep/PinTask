@@ -19,14 +19,19 @@ public class MessageTaskParserTest {
     private static final ZoneId BERLIN=ZoneId.of("Europe/Berlin");
     private static final ZonedDateTime NOW=ZonedDateTime.of(2026,10,21,21,0,0,0,BERLIN);
     private Context context;
+    private java.util.TimeZone previousZone;
 
     @Before public void before(){
+        previousZone=java.util.TimeZone.getDefault();
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("Europe/Berlin"));
         context=RuntimeEnvironment.getApplication();
         context.deleteDatabase("pintask.db");
         context.getSharedPreferences("settings",0).edit().clear()
                 .putBoolean("startup_access_reviewed_v31",true)
                 .putBoolean("interactive_shift_guide_v29",true).commit();
     }
+
+    @After public void after(){java.util.TimeZone.setDefault(previousZone);}
 
     @Test public void userExampleRecognizesFridayAt330InGermanSummerTime(){
         String incoming="### Friday, 23 October 2026\n\n### 03:30 AM\n\nYour local time in Germany (CESt)";
