@@ -45,7 +45,10 @@ public final class ShiftActivity extends Activity {
         if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",0);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
         if(state!=null)tour.restore(state.getBoolean("interactiveTour",false),state.getInt("tourStage",0));
         if(state==null)routeIntent(getIntent());render();
-        if(state==null)startupAccess.begin(()->ShiftGuide.maybeWelcome(this));
+        if(state==null) {
+            consumeSharedText(getIntent());
+            startupAccess.begin(()->ShiftGuide.maybeWelcome(this));
+        }
     }
     @Override protected void onResume(){super.onResume();TaskNotifications.syncAll(this);ReminderScheduler.rescheduleAll(this);if(repository!=null && screen!=EDITOR){remember();render();}
         if(startupAccess!=null)startupAccess.onResume();}
@@ -56,7 +59,43 @@ public final class ShiftActivity extends Activity {
         if(id>0){try(TaskStore store=new TaskStore(this)){TaskStore.Task task=store.find(id);if(task!=null){if(TaskSections.isWork(task)){TaskGroups.select(this,task.group);ShiftRepository.Run run=task.shiftRunId>0?repository.findRun(task.shiftRunId):null;if(run!=null)date=dateOf(run.startsAt);screen=task.done?HISTORY:WORK;}else screen=task.done?HISTORY:TASKS;}}}
         else if(intent.getBooleanExtra("open_work",false))screen=WORK;
     }
-    @Override protected void onNewIntent(Intent intent){super.onNewIntent(intent);remember();setIntent(intent);routeIntent(intent);render();}
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);
+        remember();setIntent(intent);routeIntent(intent);render();
+        consumeSharedText(intent);
+    }
+
+    /** Explicit Android Sharesheet/selected-text entry; never reads other apps silently. */
+    private void consumeSharedText(Intent intent){
+        if(intent==null)return;
+        String action=intent.getAction();
+        CharSequence incoming=null;
+        if(Intent.ACTION_SEND.equals(action) && "text/plain".equals(intent.getType())) {
+            incoming=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
+        } else if(Intent.ACTION_PROCESS_TEXT.equals(action)) {
+            incoming=intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
+        }
+        if(incoming!=null) {
+            String source=incoming.toString();
+            if(source.length()>5000)source=source.substring(0,5000);
+            MessageTaskDialog.editMessage(this,source,()->{quickDraft="";render();});
+            // SingleTop may be reused; do not re-import the same payload on next launch.
+            intent.setAction(null);
+        }
+    }
+
+    /** Reads clipboard only after the user taps Paste message; never polls it. */
+    private void pasteMessageTask(){
+        String text="";
+        android.content.ClipboardManager clipboard=(android.content.ClipboardManager)
+                getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        if(clipboard!=null && clipboard.hasPrimaryClip()){
+            android.content.ClipData clip=clipboard.getPrimaryClip();
+            if(clip!=null && clip.getItemCount()>0 && clip.getItemAt(0).getText()!=null)
+                text=clip.getItemAt(0).getText().toString();
+        }
+        MessageTaskDialog.editMessage(this,text,()->{quickDraft="";render();});
+    }
     private void remember(){if(quickEntry!=null)quickDraft=quickEntry.getText().toString();if(name!=null){draft=name.getText().toString();reminder=reminders.getSelectedItemPosition();repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition();}}
     @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("quickDelaySeconds",quickDelaySeconds);state.putInt("editorDelaySeconds",editorDelaySeconds);state.putInt("reminder",reminder);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
         state.putBoolean("interactiveTour",tour!=null&&tour.active());
@@ -97,6 +136,7 @@ public final class ShiftActivity extends Activity {
         action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
+        link("Paste message → task",this::pasteMessageTask);
         try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.personal(store.activeAll());if(tasks.isEmpty())empty("A little space to breathe","Add your first task above.");else{section(tasks.size()+" to do");showTasks(tasks);}}
     }
     /** One tap on the mic, then one tap on EN/DE/HR starts recording immediately. */
