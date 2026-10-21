@@ -95,7 +95,15 @@ final class VoiceTaskDialog {
      * Everything Android understood is visible and independently correctable:
      * task text, due date, 24-hour clock time, and recurrence. No re-dictation.
      */
+    static void reviewImported(Activity activity,SpokenTask parsed,Runnable saved) {
+        review(activity,parsed,saved,true);
+    }
+
     private static void review(Activity activity,SpokenTask parsed,Runnable saved){
+        review(activity,parsed,saved,false);
+    }
+
+    private static void review(Activity activity,SpokenTask parsed,Runnable saved,boolean imported){
         VoiceReviewModel model=new VoiceReviewModel(parsed,java.time.ZoneId.systemDefault());
         int pad=dp(activity,18);
 
@@ -103,7 +111,7 @@ final class VoiceTaskDialog {
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(pad,dp(activity,6),pad,dp(activity,12));
 
-        panel.addView(label(activity,"WHAT I HEARD",12,false));
+        panel.addView(label(activity,imported?"SHARED MESSAGE":"WHAT I HEARD",12,false));
         TextView heard=label(activity,parsed.original,15,true);
         heard.setPadding(dp(activity,12),dp(activity,10),dp(activity,12),dp(activity,10));
         android.graphics.drawable.GradientDrawable background=new android.graphics.drawable.GradientDrawable();
@@ -120,7 +128,7 @@ final class VoiceTaskDialog {
         title.setTextColor(FG);
         title.setSingleLine(true);
         title.setSelectAllOnFocus(true);
-        title.setContentDescription("Recognized task name");
+        title.setContentDescription(imported?"Task name from shared text":"Recognized task name");
         title.setFilters(new InputFilter[]{new InputFilter.LengthFilter(160)});
         panel.addView(title);
 
@@ -245,10 +253,14 @@ final class VoiceTaskDialog {
         scroll.setFillViewport(false);
         scroll.addView(panel);
         AlertDialog dialog=new AlertDialog.Builder(activity)
-                .setTitle("Check your voice task")
+                .setTitle(imported?"Check your message task":"Check your voice task")
                 .setView(scroll)
                 .setNegativeButton("Cancel",null)
-                .setNeutralButton("Edit transcript",(d,w)->editCommand(activity,parsed.original,VoiceLanguages.language(activity),saved))
+                .setNeutralButton(imported?"Edit message":"Edit transcript",
+                        (d,w)->{
+                            if(imported)MessageTaskDialog.editMessage(activity,parsed.original,saved);
+                            else editCommand(activity,parsed.original,VoiceLanguages.language(activity),saved);
+                        })
                 .setPositiveButton("Create task",null).create();
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             String actual=title.getText().toString().trim();
@@ -268,7 +280,7 @@ final class VoiceTaskDialog {
                 dialog.dismiss();
                 saved.run();
                 if(dueAt>0)ReminderHealth.warnWhenBlocked(activity);
-                Toast.makeText(activity,"Voice task saved",Toast.LENGTH_LONG).show();
+                Toast.makeText(activity,imported?"Message task saved":"Voice task saved",Toast.LENGTH_LONG).show();
             }catch(IllegalArgumentException error){
                 Toast.makeText(activity,error.getMessage(),Toast.LENGTH_LONG).show();
                 summary.setText(error.getMessage()+"\nTap Date, Time, Remind me, or Repeat to correct it.");
