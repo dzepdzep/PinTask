@@ -79,6 +79,42 @@ public class TimedAlarmUiTest {
         }
     }
 
+    @Test public void customSeventySevenMinuteReminderActuallyPersistsAndSchedules(){
+        try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup();
+            TaskStore store=new TaskStore(context)) {
+            find(controller.get().getWindow().getDecorView(),"Add with time or repeat").performClick();
+            entry(controller.get().getWindow().getDecorView()).setText("Reminder 77 minutes early");
+            chooseTomorrow(controller.get());
+            find(controller.get().getWindow().getDecorView(),"Time · Optional").performClick();
+            AlertDialog clock=ShadowAlertDialog.getLatestAlertDialog();
+            setClockWheels(clock,23,0);
+            clock.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+
+            find(controller.get().getWindow().getDecorView(),
+                    "Remind me earlier · Scroll or type  ▾").performClick();
+            AlertDialog early=ShadowAlertDialog.getLatestAlertDialog();
+            android.widget.NumberPicker hours=findWheel(early.getWindow().getDecorView(),
+                    "Reminder hours before");
+            android.widget.NumberPicker minutes=findWheel(early.getWindow().getDecorView(),
+                    "Reminder minutes before");
+            assertNotNull(hours);assertNotNull(minutes);
+            hours.setValue(1);minutes.setValue(17);
+            early.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            View root=controller.get().getWindow().getDecorView();
+            assertNotNull(find(root,"Alarm: 1h 17m before"));
+            find(root,"More options").performClick();
+            assertEquals(7,reminderSpinner(controller.get().getWindow().getDecorView()).getSelectedItemPosition());
+            find(controller.get().getWindow().getDecorView(),"Save task").performClick();
+            assertEquals(1,store.activePersonal().size());
+            TaskStore.Task task=store.activePersonal().get(0);
+            assertEquals(77,task.notifyBeforeMinutes);
+            assertEquals(task.dueAt-77*60_000L,task.notificationAt());
+            assertEquals(1,Shadows.shadowOf(context.getSystemService(AlarmManager.class)).getScheduledAlarms().size());
+        }
+    }
+
     private static void setClockWheels(AlertDialog dialog,int h,int m){
         android.widget.NumberPicker hours=findWheel(dialog.getWindow().getDecorView(),"Clock hour");
         android.widget.NumberPicker minutes=findWheel(dialog.getWindow().getDecorView(),"Clock minute");
