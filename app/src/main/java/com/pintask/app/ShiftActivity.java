@@ -337,7 +337,9 @@ public final class ShiftActivity extends Activity {
         tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Exact-alarm permission granted · Android may still defer during deep sleep":"Permission missing · Android may delay reminders",this::reminderTimingSettings);
         tool("Alarm-clock priority",ReminderScheduler.alarmClockPriority(this)?"On · stronger wake-up scheduling for timed tasks":"Off · optional stronger scheduling for timed tasks",this::alarmPrioritySettings);
-        tool("Status bar icon",TaskNotifications.statusIconEnabled(this)?"On · PinTask shortcut by the clock":"Off · hide PinTask shortcut",this::statusIconSettings);
+        statusIconToggle();
+        tool("Status icon diagnostics",TaskNotifications.statusIconState(this),this::statusIconSettings);
+        alarmSoundToggle();
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
         text("PinTask 3.10-rc1",12);
@@ -357,19 +359,79 @@ public final class ShiftActivity extends Activity {
                         })
                 .setNegativeButton("Cancel",null).show();
     }
+    private void statusIconToggle() {
+        LinearLayout box=card();
+        Switch control=new Switch(this);
+        control.setText("Show PinTask icon next to the clock");
+        control.setTextSize(16);
+        control.setTextColor(FG);
+        control.setContentDescription("Status bar icon switch");
+        control.setChecked(TaskNotifications.statusIconEnabled(this));
+        box.addView(control);
+        TextView note=new TextView(this);
+        note.setText(TaskNotifications.statusIconState(this));
+        note.setTextSize(13);
+        note.setTextColor(MUTED);
+        note.setPadding(0,dp(6),0,0);
+        box.addView(note);
+        control.setOnCheckedChangeListener((view,enabled)->{
+            TaskNotifications.setStatusIconEnabled(this,enabled);
+            render();
+        });
+    }
     private void statusIconSettings() {
         new AlertDialog.Builder(this)
-                .setTitle("PinTask status bar icon")
-                .setMessage("Keep a small PinTask shortcut notification in Android's status bar, beside the clock when Android allows it. Tap to open your tasks. This shortcut is silent, separate from due-task alarm sounds, and does not keep the app running. Some phones hide silent notification icons; check your Android status-bar and notification-category settings if it does not appear. The Quick Add notification remains independently controlled.")
-                .setSingleChoiceItems(new String[]{"Off · No shortcut","On · Show PinTask shortcut"},
-                        TaskNotifications.statusIconEnabled(this)?1:0,(d,selected)->{
-                            TaskNotifications.setStatusIconEnabled(this,selected==1);
-                            d.dismiss();
-                            render();
-                            if(selected==1&&!TaskNotifications.canNotifyChannel(this,TaskNotifications.STATUS_CHANNEL))
-                                toast("Allow the PinTask status-bar shortcut category in Android notification settings.");
-                        })
-                .setNegativeButton("Cancel",null).show();
+                .setTitle("Why is the icon missing?")
+                .setMessage(TaskNotifications.statusIconState(this)+
+                        "\\n\\nIf PinTask says Posted, Android received the icon notification. OxygenOS chooses whether to show silent icons beside the clock. Check Settings → Notifications & status bar → Status bar → Notification icons (exact labels may vary). The shortcut never controls your alarm sounds.")
+                .setPositiveButton("Refresh icon",(d,i)->{
+                    TaskNotifications.showStatusIcon(this);
+                    render();
+                    toast(TaskNotifications.statusIconState(this));
+                })
+                .setNeutralButton("Icon notification settings",(d,i)->{
+                    try{
+                        Intent settings=new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+                        settings.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName());
+                        settings.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,TaskNotifications.STATUS_CHANNEL);
+                        startActivity(settings);
+                    }catch(RuntimeException unavailable){
+                        startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()));
+                    }
+                })
+                .setNegativeButton("Close",null).show();
+    }
+    private void alarmSoundToggle() {
+        LinearLayout box=card();
+        Switch control=new Switch(this);
+        control.setText("Also ring with alarm ringtone");
+        control.setContentDescription("Direct alarm ringtone switch");
+        control.setTextColor(FG);
+        control.setTextSize(16);
+        control.setChecked(AlarmSoundService.enabled(this));
+        box.addView(control);
+        TextView hint=new TextView(this);
+        hint.setText(AlarmSoundService.enabled(this)?
+                "On · play an alarm ringtone for up to 30 seconds when a timed alarm fires":
+                "Off · rely on the Android timed-reminder notification sound");
+        hint.setTextSize(13);hint.setTextColor(MUTED);hint.setPadding(0,dp(6),0,0);
+        box.addView(hint);
+        control.setOnCheckedChangeListener((button,enabled)->{
+            if(!enabled){
+                AlarmSoundService.setEnabled(this,false);
+                render();
+                return;
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("Enable separate alarm ringing?")
+                .setMessage("For new timed reminders, PinTask will try to play your phone's alarm ringtone for up to 30 seconds through an Android foreground service, even if the reminder notification category was silenced. Android may still block audio under Do Not Disturb or power restrictions. If notification sounds already work, this could ring twice. Try Reminder health check after enabling.")
+                .setPositiveButton("Enable ringtone",(d,w)->{
+                    AlarmSoundService.setEnabled(this,true);
+                    render();
+                })
+                .setNegativeButton("Cancel",(d,w)->render()).show();
+        });
     }
     private void quickSettings(){new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();render();if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},42);}).setNegativeButton("Cancel",null).show();}
     private void historyPage(){heading("Completed tasks","Your task history");link("‹ Back to More",()->navigate(MORE));try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> done=store.completedAll();if(done.isEmpty())empty("Nothing completed yet","Finished tasks will appear here.");for(TaskStore.Task task:done)body.addView(TaskCards.done(this,task,this::render));}}
