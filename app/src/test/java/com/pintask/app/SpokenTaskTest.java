@@ -254,7 +254,7 @@ public class SpokenTaskTest {
             assertEquals(0,persisted.recurrence);
         }
     }
-    @Test public void manualAdvancePresetOverridesWhatSpeechRecognitionHeard(){
+    @Test public void manualAdvanceWheelOverridesWhatSpeechRecognitionHeard(){
         try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
             TaskStore store=new TaskStore(context)){
             VoiceTaskDialog.editCommand(activity.get(),"Wash dishes tomorrow at 13:00",()->{});
