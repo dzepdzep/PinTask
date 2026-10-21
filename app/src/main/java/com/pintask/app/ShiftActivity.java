@@ -311,6 +311,7 @@ public final class ShiftActivity extends Activity {
         tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Exact-alarm permission granted · Android may still defer during deep sleep":"Permission missing · Android may delay reminders",this::reminderTimingSettings);
         tool("Alarm-clock priority",ReminderScheduler.alarmClockPriority(this)?"On · stronger wake-up scheduling for timed tasks":"Off · optional stronger scheduling for timed tasks",this::alarmPrioritySettings);
+        tool("Status bar icon",TaskNotifications.statusIconEnabled(this)?"On · PinTask shortcut by the clock":"Off · hide PinTask shortcut",this::statusIconSettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
         text("PinTask 3.8-rc1",12);
@@ -327,6 +328,20 @@ public final class ShiftActivity extends Activity {
                             d.dismiss();render();
                             if(!TaskNotifications.canNotifyChannel(this,TaskNotifications.activeReminderChannel(this)))
                                 ReminderHealth.warnWhenBlocked(this);
+                        })
+                .setNegativeButton("Cancel",null).show();
+    }
+    private void statusIconSettings() {
+        new AlertDialog.Builder(this)
+                .setTitle("PinTask status bar icon")
+                .setMessage("Keep a small PinTask shortcut notification in Android's status bar, beside the clock when Android allows it. Tap to open your tasks. This shortcut is silent, separate from due-task alarm sounds, and does not keep the app running. Some phones hide silent notification icons; check your Android status-bar and notification-category settings if it does not appear. The Quick Add notification remains independently controlled.")
+                .setSingleChoiceItems(new String[]{"Off · No shortcut","On · Show PinTask shortcut"},
+                        TaskNotifications.statusIconEnabled(this)?1:0,(d,selected)->{
+                            TaskNotifications.setStatusIconEnabled(this,selected==1);
+                            d.dismiss();
+                            render();
+                            if(selected==1&&!TaskNotifications.canNotifyChannel(this,TaskNotifications.STATUS_CHANNEL))
+                                toast("Allow the PinTask status-bar shortcut category in Android notification settings.");
                         })
                 .setNegativeButton("Cancel",null).show();
     }
