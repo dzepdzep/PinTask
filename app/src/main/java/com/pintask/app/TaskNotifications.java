@@ -21,6 +21,10 @@ import java.util.Date;
 /** Watch-compatible task notifications, optional phone-only pinning, and inline Quick Add. */
 public final class TaskNotifications {
     public static final String CHANNEL = "unfinished_tasks";
+    /** Separate channel for the user-toggleable persistent status-bar shortcut. */
+    static final String STATUS_CHANNEL = "pintask_status_icon_v39";
+    private static final String STATUS_PREF = "show_status_icon_v39";
+    private static final int STATUS_ID = 1999999998;
     // New ID: Android does not allow apps to change the sound of an existing channel.
     public static final String REMINDER_CHANNEL = "due_reminders_alarm_v3";
     // Android channels have immutable importance. Separate default-importance
@@ -49,6 +53,12 @@ public final class TaskNotifications {
         persistent.enableVibration(false);
         persistent.setSound(null, null);
         manager.createNotificationChannel(persistent);
+        NotificationChannel status = new NotificationChannel(
+                STATUS_CHANNEL,"PinTask status-bar shortcut",NotificationManager.IMPORTANCE_DEFAULT);
+        status.setDescription("Optional PinTask shortcut icon in the status bar; silent and separate from reminder alarms");
+        status.enableVibration(false);
+        status.setSound(null,null);
+        manager.createNotificationChannel(status);
         NotificationChannel due = new NotificationChannel(
                 REMINDER_CHANNEL, "Timed task alarms", NotificationManager.IMPORTANCE_HIGH);
         due.setDescription("Audible alarm ringtone and vibration for scheduled tasks and snoozed reminders");
@@ -291,6 +301,41 @@ public final class TaskNotifications {
         context.getSystemService(NotificationManager.class).notify("undo",(int)id,notification);
     }
 
+    /** User-toggleable notification shortcut; Android ultimately controls the top bar. */
+    static boolean statusIconEnabled(Context context){
+        return context.getSharedPreferences("settings",Context.MODE_PRIVATE)
+                .getBoolean(STATUS_PREF,false);
+    }
+    static void setStatusIconEnabled(Context context,boolean enabled){
+        context.getSharedPreferences("settings",Context.MODE_PRIVATE)
+                .edit().putBoolean(STATUS_PREF,enabled).apply();
+        showStatusIcon(context);
+    }
+    static void showStatusIcon(Context context){
+        NotificationManager manager=context.getSystemService(NotificationManager.class);
+        if(manager==null)return;
+        if(!statusIconEnabled(context) || !canNotify(context)){
+            manager.cancel(STATUS_ID);return;
+        }
+        ensureChannel(context);
+        NotificationChannel channel=manager.getNotificationChannel(STATUS_CHANNEL);
+        if(channel==null||channel.getImportance()==NotificationManager.IMPORTANCE_NONE){
+            manager.cancel(STATUS_ID);return;
+        }
+        Notification notification=new Notification.Builder(context,STATUS_CHANNEL)
+                .setSmallIcon(R.drawable.ic_pin)
+                .setContentTitle("PinTask")
+                .setContentText("Tap to open your tasks")
+                .setContentIntent(open(context))
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setCategory(Notification.CATEGORY_STATUS)
+                .build();
+        notification.flags|=Notification.FLAG_NO_CLEAR;
+        manager.notify(STATUS_ID,notification);
+    }
+
     /** v2 deliberately requires fresh opt-in after older always-on builds. */
     public static boolean quickAddEnabled(Context context) {
         return context.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean("quick_add_opt_in_v2",false);
@@ -349,6 +394,7 @@ public final class TaskNotifications {
 
     public static void syncAll(Context context) {
         showQuickAdd(context);
+        showStatusIcon(context);
         if (!canNotify(context)) return;
         try (TaskStore store = new TaskStore(context)) {
             for (TaskStore.Task task : store.activeAll()) {
