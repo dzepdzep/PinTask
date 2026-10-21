@@ -1,3 +1,11 @@
+# PinTask 3.9-rc1 — Message-to-task import and status bar icon
+
+- **Share or paste text as a task:** In Android, select text or share a message to PinTask, or open Tasks → **Paste message → task**. PinTask only reads text that you explicitly share or paste, and parses dates/times offline; no SMS, messaging, notification-listener or microphone permissions are added.
+- **Example:** `Friday, 23 October 2026` followed by `03:30 AM` and `Your local time in Germany (CESt)` resolves to 23 October 2026 at 03:30 Europe/Berlin. The message does not give a task name, so you must enter one manually before creating it.
+- **Always review first:** The message and parsed schedule open in the existing editable voice-task review UI. You can adjust title, date, time, early alert and repeat. Nothing is scheduled until **Create task** is tapped. Conflicting multiple dates or times, wrong weekdays/time-zone labels and ambiguous daylight-saving times are rejected rather than guessed. This does not import chats automatically.
+- **PinTask icon next to the clock:** A separate, user-toggleable status-bar shortcut notification appears when allowed by Android, controlled under More → **Status bar icon**. It is silent and separate from Quick Add and alarm notification channels. Android/ColorOS may hide silent status-bar icons, so on-device visibility cannot be guaranteed solely through the app.
+- **Existing functions preserved:** Voice task input and its supported EN/DE/HR language parsing, work shifts, task data, reminders, widgets and notification settings are unchanged except for the new optional shortcut. This branch remains a test release candidate. **The OnePlus alarm sound issue is not fixed or claimed fixed.**
+
 # PinTask 3.8-rc1 — Optional alarm-clock timing and audible troubleshooting
 
 - **Reported failure not yet resolved on-device:** OnePlus/Android 16 notifications have arrived 7 minutes later than the selected early reminder and without audible alarms. Do not mark as fixed until the 15-minute early alarm and ringtone succeed on the affected device with the screen locked.
