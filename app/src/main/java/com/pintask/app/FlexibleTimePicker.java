@@ -183,7 +183,10 @@ final class FlexibleTimePicker {
                 .setView(panel)
                 .setNegativeButton("Cancel",null)
                 .setPositiveButton(early?"Set reminder":"Use time",null).create();
-        dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+        dialog.show();
+        // Install the confirm handler synchronously. Some UI test environments
+        // defer OnShow callbacks, which would otherwise allow a no-op tap.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             try{
                 int value=typedMode.isChecked()?(early?parseAdvance(input.getText().toString()):
                         parseClock(input.getText().toString())):
@@ -195,8 +198,7 @@ final class FlexibleTimePicker {
                 if(typedMode.isChecked())input.setError(failure.getMessage());
                 Toast.makeText(activity,failure.getMessage(),Toast.LENGTH_LONG).show();
             }
-        }));
-        dialog.show();
+        });
         if(dialog.getWindow()!=null)dialog.getWindow().setSoftInputMode(
                 android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     }
