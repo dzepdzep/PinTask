@@ -26,9 +26,12 @@ public class StatusBarIconTest {
         TaskNotifications.setStatusIconEnabled(context,true);
         assertTrue(TaskNotifications.statusIconEnabled(context));
         assertEquals(1,countStatus());
+        assertTrue(TaskNotifications.statusIconState(context),
+                TaskNotifications.statusIconState(context).startsWith("Posted"));
         TaskNotifications.setStatusIconEnabled(context,false);
         assertFalse(TaskNotifications.statusIconEnabled(context));
         assertEquals(0,countStatus());
+        assertTrue(TaskNotifications.statusIconState(context).startsWith("Off"));
     }
 
     @Test public void disablingShortcutLeavesQuickAddAlone(){

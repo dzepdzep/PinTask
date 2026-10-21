@@ -336,6 +336,22 @@ public final class TaskNotifications {
         manager.notify(STATUS_ID,notification);
     }
 
+    /** Whether Android accepted our status-bar shortcut notification. Visibility
+     * in the clock area is still controlled by OxygenOS system status-bar settings. */
+    static String statusIconState(Context context) {
+        if(!statusIconEnabled(context))return "Off · enable the switch below";
+        if(!canNotify(context))return "Blocked · enable PinTask app notifications";
+        if(!canNotifyChannel(context,STATUS_CHANNEL))
+            return "Blocked · enable PinTask status-bar shortcut notification category";
+        NotificationManager manager=context.getSystemService(NotificationManager.class);
+        if(manager==null)return "Android notification manager not available";
+        for(android.service.notification.StatusBarNotification notification:manager.getActiveNotifications()) {
+            if(notification.getId()==STATUS_ID && notification.getTag()==null)
+                return "Posted · if no icon appears, check OxygenOS notification icons";
+        }
+        return "Not posted · use Refresh icon, then check notification settings";
+    }
+
     /** v2 deliberately requires fresh opt-in after older always-on builds. */
     public static boolean quickAddEnabled(Context context) {
         return context.getSharedPreferences("settings",Context.MODE_PRIVATE).getBoolean("quick_add_opt_in_v2",false);
