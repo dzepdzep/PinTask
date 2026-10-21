@@ -1,3 +1,10 @@
+# PinTask 3.10-rc1 — Scroll-or-type time and earlier reminder pickers
+
+- **Clock time:** For regular, work, recurring-routine, spoken, or message-imported tasks, users can scroll separate **HOURS** and **MINUTES** wheels or switch to **Type** and enter exact 24-hour `HH:mm` (for example `03:30` or `15:45`). 24:00 and invalid minutes are rejected; Cancel does not change the task.
+- **Advance reminders:** The main task editor retains existing easy presets and guided-tour spinner, and adds **Remind me earlier · Scroll or type**. The two-wheel input allows 0 minutes (at time) up to 24 hours (max stored in database) or typed `75`, `1:15`, `1h 15m`. The chosen amount is persisted with the task, including non-preset minutes such as 77.
+- **Voice / imported-message review:** Its date/time/advance fields now use the same flexible picker, preserving editability and confirmation. No changes to voice-language parsing or message import.
+- **No database migration or deletion:** Existing tasks, saved early reminders and other 3.9 features remain intact. The earlier OnePlus alarm-sound failure is **not fixed** by these UI changes; the release is a candidate pending real-device checks.
+
 # PinTask 3.9-rc1 — Message-to-task import and status bar icon
 
 - **Share or paste text as a task:** In Android, select text or share a message to PinTask, or open Tasks → **Paste message → task**. PinTask only reads text that you explicitly share or paste, and parses dates/times offline; no SMS, messaging, notification-listener or microphone permissions are added.
