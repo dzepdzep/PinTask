@@ -304,7 +304,7 @@ public final class TaskNotifications {
     /** User-toggleable notification shortcut; Android ultimately controls the top bar. */
     static boolean statusIconEnabled(Context context){
         return context.getSharedPreferences("settings",Context.MODE_PRIVATE)
-                .getBoolean(STATUS_PREF,true);
+                .getBoolean(STATUS_PREF,false);
     }
     static void setStatusIconEnabled(Context context,boolean enabled){
         context.getSharedPreferences("settings",Context.MODE_PRIVATE)
