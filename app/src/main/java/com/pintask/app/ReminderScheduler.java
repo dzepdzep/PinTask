@@ -147,6 +147,15 @@ public final class ReminderScheduler {
                         TaskNotifications.showDue(context, task);
                     }
                     ReminderAudit.note(context, "delivered_" + origin, id, task.notificationAt());
+                    // Optional alarm-stream playback, not solely Android's
+                    // user-configurable notification-channel sound.
+                    // Never ring stale tasks found hours late by the watchdog.
+                    boolean ringingEligible=task.dueAt>0 &&
+                            (task.notifyBeforeMinutes>=0 || task.snoozedUntil>0) &&
+                            ("alarm".equals(origin) || "direct".equals(origin)) &&
+                            System.currentTimeMillis()-task.notificationAt()<=120_000L;
+                    if(ringingEligible && AlarmSoundService.enabled(context))
+                        AlarmSoundService.start(context,task.id);
                     if (System.currentTimeMillis() - task.notificationAt() > 120_000L) {
                         ReminderAudit.note(context, "late_delivery_" + origin, id, task.notificationAt());
                         if (!"alarm".equals(origin))
