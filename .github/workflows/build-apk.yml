@@ -75,8 +75,12 @@ jobs:
             echo "::notice::Release $TAG already exists. Bump versionName and versionCode for each new app release."
             exit 0
           fi
+          EXTRA_FLAGS=()
+          if [[ "$RELEASE_VERSION" == *-rc* || "$RELEASE_VERSION" == *-beta* || "$RELEASE_VERSION" == *-alpha* ]]; then
+            EXTRA_FLAGS+=(--prerelease)
+          fi
           gh release create "$TAG" "PinTask-${RELEASE_VERSION}.apk" SHA256SUMS \
             --target "$GITHUB_SHA" \
             --title "PinTask ${RELEASE_VERSION}" \
-            --notes "Signed installable APK. Install over your existing PinTask; do not uninstall or local data will be erased. Automated tests and signature verification passed. Real-device notification behavior has not been verified." \
-            --generate-notes
+            --notes "Signed installable APK. Install over your existing PinTask; do not uninstall or local data will be erased. Automated tests and signature verification passed. IMPORTANT: This is an experimental alarm-sound release candidate. On a OnePlus/Android 16 device an alarm callback and notification post occurred on time without an audible ringtone; that failure remains unresolved. The three confirmed speech locales are English, German and Croatian. Keep a backup Clock alarm for important reminders." \
+            --generate-notes "${EXTRA_FLAGS[@]}"
