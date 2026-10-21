@@ -608,6 +608,9 @@ public final class ShiftActivity extends Activity {
             if(draft.trim().isEmpty()) { name.setError("Enter a task name"); return; }
             if(minute<0 && editorDelaySeconds<0 && (reminder>0 || repeat>0))
                 throw new IllegalArgumentException("Choose a time or delay for reminders or repeats");
+            if(editorDelaySeconds>=0 && reminderValue()>0 &&
+                    (long)editorDelaySeconds*1000L <= (long)reminderValue()*60_000L)
+                throw new IllegalArgumentException("The advance reminder would already be past. Choose a longer delay or remind closer to task time.");
             if(taskRun>0) {
                 if(editorDelaySeconds>=0)
                     repository.addTaskAfterSeconds(taskRun,draft,editorDelaySeconds,INTERVALS[repeat],reminderValue());
@@ -616,6 +619,9 @@ public final class ShiftActivity extends Activity {
                 long due=editorDelaySeconds>=0?System.currentTimeMillis()+editorDelaySeconds*1000L:
                         minute<0?0:editorDate.atTime(minute/60,minute%60).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
                 if(due>0 && due<=System.currentTimeMillis()) throw new IllegalArgumentException("Choose a future time");
+                if(due>0 && reminderValue()>0 &&
+                        due - (long)reminderValue()*60_000L <= System.currentTimeMillis())
+                    throw new IllegalArgumentException("The early reminder time has already passed. Choose a later task time or shorter advance.");
                 try(TaskStore store=new TaskStore(this)) { android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();try{TaskStore.Task created=store.add(draft,1,due,repeat,reminderValue());store.setGroup(created.id,workEditor?(editorGroup.isEmpty()?"Work":editorGroup):"");db.setTransactionSuccessful();}finally{db.endTransaction();} }
             }
             if(workEditor && taskRun==0 && editorGroup.isEmpty() && "".equals(TaskGroups.selected(this)))TaskGroups.select(this,"Work");
