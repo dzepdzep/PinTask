@@ -40,7 +40,7 @@ final class StartupAccess {
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
             return RUNTIME_NOTIFICATIONS;
         if (!TaskNotifications.canNotify(context)) return APP_NOTIFICATIONS;
-        if (!TaskNotifications.canNotifyChannel(context, TaskNotifications.activeReminderChannel(context))) return ALARM_CHANNEL;
+        if (!TaskNotifications.canAlertAudibly(context, TaskNotifications.activeReminderChannel(context))) return ALARM_CHANNEL;
         if (!TaskNotifications.canNotifyChannel(context, TaskNotifications.CHANNEL)) return TASK_CHANNEL;
         if (!ReminderScheduler.canScheduleExact(context)) return EXACT_ALARMS;
         return READY;
@@ -57,14 +57,14 @@ final class StartupAccess {
                 context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED;
         NotificationManager nm=context.getSystemService(NotificationManager.class);
         boolean appAlerts=nm!=null && nm.areNotificationsEnabled();
-        boolean alarms=TaskNotifications.canNotifyChannel(context,TaskNotifications.activeReminderChannel(context));
+        boolean alarms=TaskNotifications.canAlertAudibly(context,TaskNotifications.activeReminderChannel(context));
         boolean tasks=TaskNotifications.canNotifyChannel(context,TaskNotifications.CHANNEL);
         boolean exact=ReminderScheduler.canScheduleExact(context);
         AudioManager audio=context.getSystemService(AudioManager.class);
         int volume=audio==null?-1:audio.getStreamVolume(AudioManager.STREAM_ALARM);
         return "Notification permission: "+ok(runtime)+
                 "\nApp notifications: "+ok(appAlerts)+
-                "\nTimed task alarms: "+ok(alarms)+
+                "\nTimed task alarms (sound + importance): "+(alarms?"Ready":"SILENT OR BLOCKED — review category settings")+
                 "\nUnfinished task cards: "+ok(tasks)+
                 "\nExact alarm access: "+ok(exact)+
                 "\nAlarm volume: "+(volume<0?"Unknown":volume==0?"Muted — turn up alarm volume":"On (level "+volume+")")+
@@ -112,7 +112,7 @@ final class StartupAccess {
         showing=true;
         int missing=nextRequired(activity);
         String description=(missing==READY?
-                "All essential reminder permissions are currently allowed. "+
+                "All checked reminder permissions and audible-channel settings are currently allowed. "+
                 "You can still review battery restrictions and test a locked-phone alarm.":
                 "PinTask needs the missing access below before timed alarms can work reliably. "+
                 "Tap Fix next to open Android's permission prompt or the correct settings page.")+

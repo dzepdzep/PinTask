@@ -3,6 +3,8 @@ package com.pintask.app;
 import android.Manifest;
 import android.app.*;
 import android.content.Intent;
+import android.speech.RecognizerIntent;
+import android.content.ActivityNotFoundException;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -16,6 +18,7 @@ import java.util.*;
 /** Three destinations: everyday Tasks, Work, and advanced More. */
 public final class ShiftActivity extends Activity {
     private static final int TASKS=0, WORK=1, MORE=2, EDITOR=3, HISTORY=4, PLAN=5;
+    private static final int REQUEST_VOICE_TASK=93;
     private static final int BG=Color.rgb(12,18,30),SURFACE=Color.rgb(24,34,51),BORDER=Color.rgb(43,57,76);
     private static final int FG=Color.rgb(238,244,251),MUTED=Color.rgb(156,173,194),ACCENT=Color.rgb(166,233,205);
     private static final int[] EARLY={-2,0,5,10,15,30,60},INTERVALS={0,30,60,120,180,240};
@@ -85,13 +88,83 @@ public final class ShiftActivity extends Activity {
         heading("Tasks","Your everyday to-do list");
         LinearLayout compose=card();LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);compose.addView(row);
         quickEntry=new EditText(this);quickEntry.setSingleLine(true);quickEntry.setText(quickDraft);quickEntry.setHint("What needs doing?");quickEntry.setTextColor(FG);quickEntry.setHintTextColor(MUTED);quickEntry.setTextSize(16);quickEntry.setBackgroundColor(Color.TRANSPARENT);quickEntry.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(160)});row.addView(quickEntry,new LinearLayout.LayoutParams(0,dp(52),1));
-        Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(78),dp(48)));add.setOnClickListener(v->quickAdd());
+        Button microphone=button("🎤 "+VoiceLanguages.SHORT[VoiceLanguages.selection(this)],false);
+        microphone.setContentDescription("Speak a task");
+        row.addView(microphone,new LinearLayout.LayoutParams(dp(70),dp(48)));
+        microphone.setOnClickListener(v->chooseVoiceLanguage());
+        Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
         action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> tasks=TaskSections.personal(store.activeAll());if(tasks.isEmpty())empty("A little space to breathe","Add your first task above.");else{section(tasks.size()+" to do");showTasks(tasks);}}
     }
+    /** One tap on the mic, then one tap on EN/DE/HR starts recording immediately. */
+    private void chooseVoiceLanguage(){
+        int selected=VoiceLanguages.selection(this);
+        LinearLayout picker=new LinearLayout(this);
+        picker.setOrientation(LinearLayout.VERTICAL);
+        picker.setPadding(dp(12),dp(8),dp(12),dp(12));
+        TextView hint=new TextView(this);
+        hint.setText("Choose the language you're speaking. Listening starts right away.");
+        hint.setTextSize(14);
+        hint.setTextColor(FG);
+        hint.setPadding(dp(4),0,dp(4),dp(12));
+        picker.addView(hint);
+        LinearLayout choices=new LinearLayout(this);
+        choices.setOrientation(LinearLayout.HORIZONTAL);
+        picker.addView(choices);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("🎤 Speak a task")
+                .setView(picker)
+                .setNegativeButton("Cancel",null).create();
+        for(int i=0;i<VoiceLanguages.TAGS.length;i++){
+            final int language=i;
+            Button pick=button(VoiceLanguages.SHORT[i]+"\n"+VoiceLanguages.NAMES[i],i==selected);
+            pick.setAllCaps(false);
+            pick.setTextSize(13);
+            pick.setContentDescription("Speak in "+VoiceLanguages.NAMES[i]);
+            LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,dp(76),1);
+            params.setMargins(dp(2),0,dp(2),0);
+            choices.addView(pick,params);
+            pick.setOnClickListener(v->{
+                VoiceLanguages.select(this,language);
+                dialog.dismiss();
+                remember();
+                render();
+                startVoiceTask();
+            });
+        }
+        dialog.show();
+    }
+
+    private void startVoiceTask(){
+        remember();
+        Intent intent=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        String language=VoiceLanguages.language(this);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE,language);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,language);
+        intent.putExtra(RecognizerIntent.EXTRA_PROMPT,VoiceLanguages.prompt(language));
+        intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,3);
+        try { startActivityForResult(intent,REQUEST_VOICE_TASK); }
+        catch(ActivityNotFoundException unavailable){
+            VoiceTaskDialog.editCommand(this,quickDraft,VoiceLanguages.language(this),()->{quickDraft="";render();});
+        }
+    }
+
+    @Override protected void onActivityResult(int request,int result,Intent data){
+        super.onActivityResult(request,result,data);
+        if(request!=REQUEST_VOICE_TASK)return;
+        if(result!=RESULT_OK||data==null)return;
+        ArrayList<String> candidates=data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if(candidates==null||candidates.isEmpty()){
+            VoiceTaskDialog.editCommand(this,quickDraft,VoiceLanguages.language(this),()->{quickDraft="";render();});
+            return;
+        }
+        VoiceTaskDialog.editCommand(this,candidates.get(0),VoiceLanguages.language(this),()->{quickDraft="";render();});
+    }
+
     private void quickAdd(){
         String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
         TaskStore.Task task;
@@ -196,10 +269,11 @@ public final class ShiftActivity extends Activity {
         tool("Reminder pop-up banners",TaskNotifications.popupEnabled(this)?
                 "On · Show WhatsApp-style heads-up alerts for due tasks":"Off · Sound and status-bar icon without pop-up",this::popupSettings);
         tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
-        tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Precise alarms enabled":"Approximate · Android may delay reminders",this::reminderTimingSettings);
+        tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Exact-alarm permission granted · Android may still defer during deep sleep":"Permission missing · Android may delay reminders",this::reminderTimingSettings);
+        tool("Alarm-clock priority",ReminderScheduler.alarmClockPriority(this)?"On · stronger wake-up scheduling for timed tasks":"Off · optional stronger scheduling for timed tasks",this::alarmPrioritySettings);
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.6",12);
+        text("PinTask 3.8-rc1",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
@@ -412,6 +486,24 @@ public final class ShiftActivity extends Activity {
         }
         remember();hideKeyboard();tour.set(ShiftGuide.TIME);render();
     }
+    private void alarmPrioritySettings() {
+        new AlertDialog.Builder(this)
+                .setTitle("Alarm-clock priority")
+                .setMessage("For tasks you expect at a specific minute (including early reminders), Android's alarm-clock scheduler can wake the phone from deep idle. This makes alarms more visible to Android, may show an upcoming-alarm indicator and uses more battery. It does NOT force a ringtone: check Timed task alarms sound and alarm volume separately. Requires Alarms & reminders access. The setting affects upcoming timed alerts without changing task times.")
+                .setPositiveButton("Enable",(d,which)->{
+                    if(!ReminderScheduler.canScheduleExact(this)){
+                        toast("First allow Alarms & reminders, then enable alarm-clock priority.");
+                        reminderTimingSettings();return;
+                    }
+                    ReminderScheduler.setAlarmClockPriority(this,true);
+                    render();
+                })
+                .setNeutralButton("Disable",(d,which)->{
+                    ReminderScheduler.setAlarmClockPriority(this,false);render();
+                })
+                .setNegativeButton("Cancel",null).show();
+    }
+
     private void reminderTimingSettings() {
         AlertDialog.Builder dialog = new AlertDialog.Builder(this).setTitle("Reminder timing")
                 .setMessage("Allow alarms and reminders so timed tasks can arrive close to their chosen time, including while the phone is asleep. Without access, Android may delay them.")

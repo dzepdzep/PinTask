@@ -8,7 +8,21 @@ import android.os.Build;
 
 /** Exact reminders when permitted, with an inexact fallback. */
 public final class ReminderScheduler {
+    private static final String ALARM_CLOCK_PREF = "alarm_clock_priority_v38";
     private ReminderScheduler() {}
+
+    /** Opt-in: alarm-clock-class precision is more intrusive and uses more battery. */
+    static boolean alarmClockPriority(Context context) {
+        return context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .getBoolean(ALARM_CLOCK_PREF, false);
+    }
+
+    static void setAlarmClockPriority(Context context, boolean enabled) {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+                .edit().putBoolean(ALARM_CLOCK_PREF, enabled).commit();
+        // Replaces each existing PendingIntent alarm in-place; task data is intact.
+        rescheduleAll(context);
+    }
 
     public static boolean canScheduleExact(Context context) {
         AlarmManager manager = context.getSystemService(AlarmManager.class);
@@ -27,23 +41,47 @@ public final class ReminderScheduler {
         ReminderWatchdog.ensureScheduled(context);
         long notifyAt = task.notificationAt();
         if (notifyAt <= System.currentTimeMillis()) {
-            deliver(context, task.id);
+            // A task might have become overdue while Android held the process.
+            deliver(context, task.id, "reschedule_overdue");
             return;
         }
         AlarmManager manager = context.getSystemService(AlarmManager.class);
-        if (manager == null) return;
+        if (manager == null) {
+            ReminderAudit.note(context, "schedule_no_alarm_manager", task.id, notifyAt);
+            return;
+        }
         PendingIntent pending = alarm(context, task.id, PendingIntent.FLAG_UPDATE_CURRENT);
-        if (canScheduleExact(context)) {
+        boolean exactPermitted = canScheduleExact(context);
+        if (exactPermitted) {
             try {
-                manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
-                if(task.autoRepeat)ReminderAudit.note(context,"scheduled_exact",task.id,notifyAt);
+                if (alarmClockPriority(context)) {
+                    // Android treats these as alarm-clock events: wakes from deep
+                    // idle for the user-selected time instead of deferring the
+                    // reminder like a normal while-idle alarm.
+                    Intent open = TaskSections.openIntent(context, task.id);
+                    PendingIntent show = PendingIntent.getActivity(context, (int)task.id, open,
+                            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                    manager.setAlarmClock(new AlarmManager.AlarmClockInfo(notifyAt, show), pending);
+                    ReminderAudit.note(context, "scheduled_alarm_clock", task.id, notifyAt);
+                } else {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
+                    ReminderAudit.note(context, "scheduled_exact", task.id, notifyAt);
+                }
                 return;
             } catch (SecurityException denied) {
-                // Keep a reminder scheduled if exact access is unavailable.
+                // A permission may have been revoked between checking and scheduling.
+                ReminderAudit.note(context, "exact_permission_revoked", task.id, notifyAt);
             }
         }
-        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
-        if(task.autoRepeat)ReminderAudit.note(context,"scheduled_inexact",task.id,notifyAt);
+        if (alarmClockPriority(context))
+            ReminderAudit.note(context, "alarm_clock_permission_missing", task.id, notifyAt);
+        try {
+            manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, notifyAt, pending);
+            ReminderAudit.note(context, "scheduled_inexact", task.id, notifyAt);
+        } catch (RuntimeException failure) {
+            ReminderAudit.note(context, "schedule_failed", task.id, notifyAt);
+            android.util.Log.e("PinTask", "Could not schedule task alarm " + task.id, failure);
+        }
     }
 
     public static void cancel(Context context, long id) {
@@ -53,6 +91,7 @@ public final class ReminderScheduler {
         if (pending != null) {
             manager.cancel(pending);
             pending.cancel();
+            ReminderAudit.note(context, "cancelled", id, 0);
         }
     }
 
@@ -64,23 +103,39 @@ public final class ReminderScheduler {
 
     /** One wake-up drains all due occurrences; simultaneous alarms remain idempotent. */
     public static void deliverDue(Context context) {
+        deliverDue(context, "recovery_check");
+    }
+
+    static void deliverDue(Context context, String origin) {
         try (TaskStore store = new TaskStore(context)) {
             for (TaskStore.Task task : store.activeAll()) {
-                if (task.remindedAt == 0 && task.notificationAt() <= System.currentTimeMillis())
-                    deliver(context, task.id);
+                if (task.remindedAt == 0 && task.reminderEnabled() &&
+                        (task.dueAt > 0 || task.shiftRunId > 0 || task.snoozedUntil > 0) &&
+                        task.notificationAt() <= System.currentTimeMillis())
+                    deliver(context, task.id, origin);
             }
         }
     }
 
     public static void deliver(Context context, long id) {
+        deliver(context, id, "direct");
+    }
+
+    static void deliver(Context context, long id, String origin) {
         try (TaskStore store = new TaskStore(context)) {
-            // Don't consume the reminder if notifications are currently disabled.
-            if (!TaskNotifications.canNotify(context)) return;
+            // Don't consume a reminder if notifications are currently disabled.
+            if (!TaskNotifications.canNotify(context)) {
+                ReminderAudit.note(context, "delivery_blocked_app_notifications", id, 0);
+                return;
+            }
             TaskStore.Task candidate = store.find(id);
             if (candidate == null) return;
             String channel = candidate.dueAt == 0 && candidate.snoozedUntil == 0
                     ? TaskNotifications.CHANNEL : TaskNotifications.activeReminderChannel(context);
-            if (!TaskNotifications.canNotifyChannel(context, channel)) return;
+            if (!TaskNotifications.canNotifyChannel(context, channel)) {
+                ReminderAudit.note(context, "delivery_blocked_channel", id, candidate.notificationAt());
+                return;
+            }
             TaskStore.Task task = store.claimDueReminder(id);
             if (task != null) {
                 try {
@@ -91,9 +146,12 @@ public final class ReminderScheduler {
                         // Old behavior for tasks configured to appear immediately.
                         TaskNotifications.showDue(context, task);
                     }
-                    ReminderAudit.note(context,"delivered",id,task.notificationAt());
-                    if(System.currentTimeMillis()-task.notificationAt()>120_000L)
-                        ReminderAudit.note(context,"overdue_recovered",id,task.notificationAt());
+                    ReminderAudit.note(context, "delivered_" + origin, id, task.notificationAt());
+                    if (System.currentTimeMillis() - task.notificationAt() > 120_000L) {
+                        ReminderAudit.note(context, "late_delivery_" + origin, id, task.notificationAt());
+                        if (!"alarm".equals(origin))
+                            ReminderAudit.note(context, "recovered_by_" + origin, id, task.notificationAt());
+                    }
                     // Only new opt-in routines auto-create their next independent occurrence.
                     // This must happen after successful notification posting.
                     TaskStore.Task following=store.createNextRoutineOccurrence(id);

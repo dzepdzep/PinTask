@@ -53,7 +53,8 @@ public class BackgroundReminderRecoveryTest {
         assertTrue(store.find(first.id).remindedAt>0);
         String report=ReminderAudit.summary(context);
         assertTrue(report,report.contains("watchdog_check"));
-        assertTrue(report,report.contains("overdue_recovered"));
+        assertTrue(report,report.contains("late_delivery_watchdog"));
+        assertTrue(report,report.contains("recovered_by_watchdog"));
         ReminderWatchdog.check(context);
         assertEquals(1,notices.getActiveNotifications().length);
     }

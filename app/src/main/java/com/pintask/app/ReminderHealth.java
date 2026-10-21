@@ -5,6 +5,9 @@ import android.app.AlertDialog;
 import android.app.NotificationManager;
 import android.content.Intent;
 import android.media.AudioManager;
+import android.media.AudioAttributes;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -18,20 +21,24 @@ final class ReminderHealth {
         TaskNotifications.ensureChannel(a);
         boolean notifications=TaskNotifications.canNotify(a);
         boolean channel=TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a));
+        boolean audible=TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a));
         boolean exact=ReminderScheduler.canScheduleExact(a);
         AudioManager audio=a.getSystemService(AudioManager.class);
         int level=audio==null?-1:audio.getStreamVolume(AudioManager.STREAM_ALARM);
-        return "Notification permission: "+(notifications?"Allowed":"BLOCKED")+
+        return "Alarm-clock priority scheduling: "+(ReminderScheduler.alarmClockPriority(a)?"ON":"Off (regular exact/inexact)")+
+                "\nNotification permission: "+(notifications?"Allowed":"BLOCKED")+
                 "\nTimed alarm category: "+(channel?"Enabled":"BLOCKED")+
+                "\nAudible alarm channel: "+(audible?"Ready":"SILENT/LOW IMPORTANCE — check category sound")+
                 "\nExact alarm permission: "+(exact?"Enabled":"NOT ALLOWED — alerts can be late")+
                 "\nAlarm volume: "+(level<0?"Unknown":level==0?"MUTED":"Level "+level)+
-                "\n\nAndroid Do Not Disturb, silent modes and the phone maker's battery controls may still restrict sounds. " +
+                "\n\nIf alarm volume is muted, or the notification category was silenced, notifications may arrive without ringing. Android Do Not Disturb, silent modes and the phone maker's battery controls may still restrict sounds. " +
                 "This check cannot guarantee future delivery. Test with the screen locked.";
     }
 
     static void show(Activity a) {
         String[] choices={
             "Play an alarm notification now",
+            "Play alarm ringtone directly (5 seconds)",
             "Schedule an alarm test in 60 seconds",
             "Enable alarms for existing silent timed tasks…",
             "Open exact alarm permission",
@@ -43,21 +50,22 @@ final class ReminderHealth {
                 .setItems(choices,(d,which)->{
                     switch(which) {
                         case 0: immediateTest(a);break;
-                        case 1: delayedTest(a);break;
-                        case 2: offerExisting(a);break;
-                        case 3: openExact(a);break;
-                        case 4: openNotifications(a);break;
-                        case 5: openAppSettings(a);break;
+                        case 1: directRingtoneTest(a);break;
+                        case 2: delayedTest(a);break;
+                        case 3: offerExisting(a);break;
+                        case 4: openExact(a);break;
+                        case 5: openNotifications(a);break;
+                        case 6: openAppSettings(a);break;
                     }
                 }).setPositiveButton("Close",null).show();
     }
 
     static void warnWhenBlocked(Activity a) {
         if(!TaskNotifications.canNotify(a) ||
-                !TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+                !TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             new AlertDialog.Builder(a).setTitle("Your task alarm may be silent")
-                    .setMessage("Android notifications or the Timed task alarms category are disabled. The task is saved, but the alarm cannot sound until notifications are enabled.")
-                    .setNegativeButton("Later",null).setPositiveButton("Fix notifications",(d,i)->openNotifications(a)).show();
+                    .setMessage("Android notifications may be blocked, or the active Timed task alarms category may be silent or low importance. The task is saved, but it may not make a sound until you fix its notification category settings.")
+                    .setNegativeButton("Later",null).setPositiveButton("Fix alarm channel",(d,i)->openAlarmChannel(a)).show();
         } else if(!ReminderScheduler.canScheduleExact(a)) {
             new AlertDialog.Builder(a).setTitle("Your timed reminder could arrive late")
                     .setMessage("Exact alarm access is disabled. PinTask saved this task with an inexact fallback, which Android may delay. Allow Alarms & reminders for the intended time.")
@@ -65,8 +73,36 @@ final class ReminderHealth {
         }
     }
 
+    /**
+     * Explicit user-initiated sound-only check. Notification test vs direct
+     * ringtone tells users whether their phone is silencing the notification
+     * channel, or the alarm audio stream itself.
+     */
+    private static void directRingtoneTest(Activity a) {
+        try {
+            Ringtone ringtone=RingtoneManager.getRingtone(a,
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM));
+            if(ringtone==null) {
+                Toast.makeText(a,"No alarm ringtone configured in Android settings",Toast.LENGTH_LONG).show();
+                return;
+            }
+            ringtone.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+            ringtone.play();
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+                try { ringtone.stop(); } catch (RuntimeException ignored) {}
+            },5000L);
+            Toast.makeText(a,"Alarm ringtone test: 5 seconds. Check alarm volume if silent.",Toast.LENGTH_LONG).show();
+        } catch (RuntimeException failure) {
+            android.util.Log.w("PinTask","Direct alarm ringtone test failed",failure);
+            Toast.makeText(a,"Unable to play alarm ringtone. Check Android alarm sound settings.",Toast.LENGTH_LONG).show();
+        }
+    }
+
     private static void immediateTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+        if(!TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
@@ -78,7 +114,7 @@ final class ReminderHealth {
     }
 
     private static void delayedTest(Activity a) {
-        if(!TaskNotifications.canNotifyChannel(a,TaskNotifications.activeReminderChannel(a))) {
+        if(!TaskNotifications.canAlertAudibly(a,TaskNotifications.activeReminderChannel(a))) {
             warnWhenBlocked(a);return;
         }
         try(TaskStore store=new TaskStore(a)) {
@@ -124,6 +160,15 @@ final class ReminderHealth {
         try {
             a.startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+a.getPackageName())));
         } catch(Exception unavailable) {openAppSettings(a);}
+    }
+
+    private static void openAlarmChannel(Activity a) {
+        try {
+            Intent i = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+            i.putExtra(Settings.EXTRA_APP_PACKAGE, a.getPackageName());
+            i.putExtra(Settings.EXTRA_CHANNEL_ID, TaskNotifications.activeReminderChannel(a));
+            a.startActivity(i);
+        } catch (Exception unavailable) { openNotifications(a); }
     }
 
     private static void openNotifications(Activity a) {

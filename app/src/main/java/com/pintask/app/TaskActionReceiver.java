@@ -31,7 +31,7 @@ public final class TaskActionReceiver extends BroadcastReceiver {
         if (id <= 0) return;
         if (TaskNotifications.ACTION_REMINDER.equals(action)) {
             ReminderAudit.note(context,"alarm_callback",id,0);
-            ReminderScheduler.deliverDue(context);
+            ReminderScheduler.deliverDue(context, "alarm");
         } else if (TaskNotifications.ACTION_DONE.equals(action)) {
             try (TaskStore store = new TaskStore(context)) {
                 TaskStore.Completion completion = store.complete(id);

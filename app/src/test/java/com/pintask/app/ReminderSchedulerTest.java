@@ -19,6 +19,7 @@ public class ReminderSchedulerTest {
         context=RuntimeEnvironment.getApplication();
         context.deleteDatabase("pintask.db");
         context.getSharedPreferences("settings",0).edit().clear().commit();
+        context.getSharedPreferences("reminder_diagnostics_v36",0).edit().clear().commit();
         store=new TaskStore(context);
         alarms=context.getSystemService(AlarmManager.class);
         notifications=context.getSystemService(NotificationManager.class);
@@ -124,6 +125,72 @@ public class ReminderSchedulerTest {
         } finally {db.endTransaction();}
         ReminderScheduler.rescheduleAll(context);
         assertEquals(1001,Shadows.shadowOf(alarms).getScheduledAlarms().size());
+    }
+
+    @Test public void silentOrLowImportanceChannelIsNotReportedAudible() {
+        TaskNotifications.ensureChannel(context);
+        assertTrue(TaskNotifications.canAlertAudibly(context,TaskNotifications.activeReminderChannel(context)));
+        // Use distinct categories: deleting/recreating a channel can restore the
+        // original user-defined sound and importance on actual Android.
+        NotificationChannel quiet=new NotificationChannel("test_quiet","Quiet",NotificationManager.IMPORTANCE_LOW);
+        quiet.setSound(null,null);
+        notifications.createNotificationChannel(quiet);
+        assertTrue(TaskNotifications.canNotifyChannel(context,"test_quiet"));
+        assertFalse(TaskNotifications.canAlertAudibly(context,"test_quiet"));
+
+        NotificationChannel silent=new NotificationChannel("test_silent","Silent",NotificationManager.IMPORTANCE_HIGH);
+        silent.setSound(null,null);
+        notifications.createNotificationChannel(silent);
+        assertTrue(TaskNotifications.canNotifyChannel(context,"test_silent"));
+        assertFalse(TaskNotifications.canAlertAudibly(context,"test_silent"));
+    }
+
+    @Test public void syncDoesNotPrePostAndSilenceAnOverdueFirstAlarm() {
+        TaskStore.Task task=store.add("Overdue alarm",1,System.currentTimeMillis()-2000,0,0);
+        TaskNotifications.syncAll(context);
+        assertEquals(0,notifications.getActiveNotifications().length);
+        ReminderScheduler.rescheduleAll(context);
+        assertNotNull(Shadows.shadowOf(notifications).getNotification((int)task.id));
+        assertTrue(store.find(task.id).remindedAt>0);
+        assertTrue(ReminderAudit.summary(context).contains("delivered_reschedule_overdue"));
+    }
+
+    @Test public void scheduleAuditIncludesOneTimeReminders() {
+        TaskStore.Task task=store.add("One time",1,System.currentTimeMillis()+600_000,0,0);
+        ReminderScheduler.schedule(context,task);
+        String report=ReminderAudit.summary(context);
+        assertTrue(report,report.contains("scheduled_exact #"+task.id));
+    }
+
+    @Test public void auditSeparatesLateAlarmCallbackFromRecovery() {
+        TaskStore.Task task=store.add("Late",1,System.currentTimeMillis()-300_000,0,0);
+        ReminderScheduler.deliverDue(context,"alarm");
+        String report=ReminderAudit.summary(context);
+        assertTrue(report.contains("late_delivery_alarm #"+task.id));
+        assertFalse(report.contains("recovered_by_alarm #"+task.id));
+    }
+
+    @Test @Config(sdk=31) public void optInAlarmClockUsesActualEarlyAlertTime() {
+        Shadows.shadowOf(alarms).setCanScheduleExactAlarms(true);
+        ReminderScheduler.setAlarmClockPriority(context,true);
+        long due=System.currentTimeMillis()+3_600_000L;
+        TaskStore.Task task=store.add("Alert 15 minutes early",1,due,0,15);
+        ReminderScheduler.schedule(context,task);
+        AlarmManager.AlarmClockInfo clock=alarms.getNextAlarmClock();
+        assertNotNull("Alarm clock priority must register an OS alarm-clock event",clock);
+        assertEquals(due-15*60_000L,clock.getTriggerTime());
+        assertTrue(ReminderAudit.summary(context).contains("scheduled_alarm_clock #"+task.id));
+    }
+
+    @Test @Config(sdk=31) public void optedInWithoutAccessReportsFallbackInsteadOfClaimingPrecision() {
+        Shadows.shadowOf(alarms).setCanScheduleExactAlarms(false);
+        ReminderScheduler.setAlarmClockPriority(context,true);
+        TaskStore.Task task=store.add("Inexact fallback",1,System.currentTimeMillis()+600_000L,0,0);
+        ReminderScheduler.schedule(context,task);
+        assertEquals(1,Shadows.shadowOf(alarms).getScheduledAlarms().size());
+        String report=ReminderAudit.summary(context);
+        assertTrue(report,report.contains("alarm_clock_permission_missing #"+task.id));
+        assertTrue(report,report.contains("scheduled_inexact #"+task.id));
     }
 
     @Test @Config(sdk=31) public void deniedExactAccessKeepsInexactAlarm() {
