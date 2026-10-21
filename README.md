@@ -1,3 +1,11 @@
+# PinTask 3.11-rc1 — Independent alarm ringtone and verifiable icon switch
+
+- **Status icon is a real toggle:** More → Show PinTask icon next to the clock (default off). The adjacent **Status icon diagnostics** distinguishes Off, permission/category blocked, not posted, and posted. PinTask cannot force OxygenOS to display silent notification icons if the device's status-bar settings hide them. Refresh and category-settings shortcuts are provided.
+- **Optional alarm ringtone:** More → Also ring with alarm ringtone (default off). On a newly delivered, timely scheduled alarm, PinTask also requests a bounded 30-second foreground audio playback of the system alarm ringtone, independently of the sound chosen for Android notification channels. A Stop ringing action and 30-second auto-stop are provided. Because this is additional to the normal notification, users whose notification sounds already work may hear two sounds. Android DND/power restrictions can still prevent sound. Due alarms recovered very late by the watchdog do not unexpectedly ring.
+- **Diagnostic detail:** More → Reminder health check shows direct-ringtone and icon status; More → Reminder diagnostics records ringtone service request, blocked start, playback started, playback failure or ringtone stopped (the logs cannot prove an audible sound actually reached the user).
+- **Preserves existing behavior:** The stored tasks, voice parsing, import from messages, timer wheels, Quick Add, active task notifications and exact alarm scheduler remain. No data migration or uninstall. No promise of a confirmed hardware fix until a locked-screen alarm rings on the affected OnePlus.
+- **Android FGS:** Only opt-in playback uses `foregroundServiceType=mediaPlayback`. This is an experimental candidate, not a stable release.
+
 # PinTask 3.10-rc1 — Scroll-or-type time and earlier reminder pickers
 
 - **Clock time:** For regular, work, recurring-routine, spoken, or message-imported tasks, users can scroll separate **HOURS** and **MINUTES** wheels or switch to **Type** and enter exact 24-hour `HH:mm` (for example `03:30` or `15:45`). 24:00 and invalid minutes are rejected; Cancel does not change the task.
