@@ -147,6 +147,7 @@ public final class ReminderScheduler {
                         TaskNotifications.showDue(context, task);
                     }
                     ReminderAudit.note(context, "delivered_" + origin, id, task.notificationAt());
+                    TaskNotifications.showStatusIcon(context);
                     // Optional alarm-stream playback, not solely Android's
                     // user-configurable notification-channel sound.
                     // Never ring stale tasks found hours late by the watchdog.
