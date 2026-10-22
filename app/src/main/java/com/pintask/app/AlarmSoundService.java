@@ -5,7 +5,8 @@ import android.content.*;
 import android.media.*;
 import android.net.Uri;
 import android.os.*;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Explicit opt-in alarm sound, independently of user-muted notification channels.
@@ -20,6 +21,10 @@ public final class AlarmSoundService extends Service {
     private static final String ID = "alarm_task_id";
     private static final int NOTIFICATION_ID = 1999999997;
     private static final long MAX_RING_MS = 30_000L;
+    // The receiver and this service run in the same app process. Keep one ringtone
+    // for simultaneous alarms, but don't silence a different task when Done is
+    // pressed on an unrelated reminder.
+    private static final Set<Long> activeRequests = new HashSet<>();
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Ringtone ringtone;
     private final Runnable timeout = this::stopRinging;
@@ -36,22 +41,40 @@ public final class AlarmSoundService extends Service {
     }
     static boolean start(Context context,long taskId) {
         if(!enabled(context) || !TaskNotifications.canNotify(context))return false;
+        synchronized(activeRequests){activeRequests.add(taskId);}
         try {
             Intent i=new Intent(context,AlarmSoundService.class).setAction(RING).putExtra(ID,taskId);
             context.startForegroundService(i);
             ReminderAudit.note(context,"ringtone_service_requested",taskId,0);
             return true;
         } catch(RuntimeException denied) {
+            synchronized(activeRequests){activeRequests.remove(taskId);}
             ReminderAudit.note(context,"ringtone_service_blocked",taskId,0);
             android.util.Log.w("PinTask","Android prevented background alarm playback",denied);
             return false;
         }
     }
+    /** Done or Snooze stops ringing if this task was playing. When multiple
+     * reminders ring together, the others keep ringing until addressed. */
+    static void stopForTask(Context context,long taskId) {
+        boolean last;
+        synchronized(activeRequests) {
+            if(!activeRequests.remove(taskId))return;
+            last=activeRequests.isEmpty();
+        }
+        if(last)stop(context);
+    }
     static void stop(Context context) {
+        synchronized(activeRequests){activeRequests.clear();}
         try {
-            context.startService(new Intent(context,AlarmSoundService.class).setAction(STOP));
-        } catch(RuntimeException ignored) {
-            // Android may refuse background service starts; existing ring stops at 30s.
+            // Do not start a NEW background service just to stop audio:
+            // Android 8+ may reject startService() from notification actions.
+            // stopService() destroys an existing service and releases the ringtone
+            // in onDestroy(), even if the screen is locked.
+            context.stopService(new Intent(context,AlarmSoundService.class));
+        } catch(RuntimeException error) {
+            ReminderAudit.note(context,"ringtone_stop_failed",0,0);
+            android.util.Log.w("PinTask","Android could not stop the active ringtone service",error);
         }
     }
     private void channel() {
@@ -99,6 +122,14 @@ public final class AlarmSoundService extends Service {
         }
         long taskId=intent.getLongExtra(ID,0);
         if(taskId<=0){stopRinging();return START_NOT_STICKY;}
+        synchronized(activeRequests) {
+            // A user could press Done before Android finishes launching the
+            // foreground service. A cancelled task must never start ringing.
+            if(!activeRequests.contains(taskId)) {
+                stopRinging();
+                return START_NOT_STICKY;
+            }
+        }
         try {
             // Must enter foreground promptly before playback on Android 8+.
             startForeground(NOTIFICATION_ID,notification());
@@ -142,11 +173,13 @@ public final class AlarmSoundService extends Service {
             ReminderAudit.note(this,"ringtone_stopped",activeTask,0);
         }
         activeTask=0;
+        synchronized(activeRequests){activeRequests.clear();}
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
     @Override public void onDestroy() {
         handler.removeCallbacks(timeout);
+        synchronized(activeRequests){activeRequests.clear();}
         if(ringtone!=null) {
             try {ringtone.stop();} catch(RuntimeException ignored) {}
             ringtone=null;
