@@ -467,6 +467,9 @@ public final class TaskNotifications {
     }
 
     public static void cancel(Context context, long id) {
+        // Shared path used by notification Done, in-app Done, Snooze and
+        // dismiss actions. Remove only this task's active ringtone first.
+        AlarmSoundService.stopForTask(context,id);
         TaskWidget.refreshAll(context);
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
