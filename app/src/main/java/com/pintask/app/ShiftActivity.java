@@ -25,6 +25,8 @@ public final class ShiftActivity extends Activity {
     private ShiftRepository repository;
     private LinearLayout body;
     private UndoBar undoBar;
+    private ScrollView currentPageScroll;
+    private int lastRenderedScreen=-1;
     private int screen=TASKS,subpage=0;
     private LocalDate date=LocalDate.now(),editorDate=LocalDate.now();
     private long taskRun=0,detailRun=0;
@@ -130,6 +132,8 @@ public final class ShiftActivity extends Activity {
     @Override public void onBackPressed(){if(tour!=null&&tour.active())tour.stop();remember();if(screen==EDITOR)screen=workEditor?WORK:TASKS;else if(screen==HISTORY)screen=MORE;else if(screen==PLAN)screen=WORK;else if(screen==WORK && detailRun!=0)detailRun=0;else if(screen!=TASKS)screen=TASKS;else{super.onBackPressed();return;}render();}
     private void navigate(int page){remember();screen=page;subpage=0;detailRun=0;render();}
     private void render(){
+        final int restoreY=screen==lastRenderedScreen && currentPageScroll!=null?
+                currentPageScroll.getScrollY():0;
         name=null;quickEntry=null;
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
         if(Build.VERSION.SDK_INT>=30)root.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());int keyboard=insets.getInsets(WindowInsets.Type.ime()).bottom;v.setPadding(bars.left,bars.top,bars.right,Math.max(bars.bottom,keyboard));return insets;});else root.setFitsSystemWindows(true);
@@ -141,6 +145,12 @@ public final class ShiftActivity extends Activity {
         LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(12),dp(8),dp(12),dp(10));nav.setBackgroundColor(Color.rgb(16,24,38));root.addView(nav);
         String[] labels={"Tasks","Work","More"};int selected=screen==EDITOR?(workEditor?WORK:TASKS):screen==HISTORY?MORE:screen==PLAN?WORK:screen;
         for(int i=0;i<labels.length;i++){final int page=i;TextView tab=new TextView(this);tab.setText(labels[i]);tab.setGravity(Gravity.CENTER);tab.setTextSize(15);tab.setTypeface(Typeface.DEFAULT,selected==i?Typeface.BOLD:Typeface.NORMAL);tab.setTextColor(selected==i?ACCENT:MUTED);tab.setBackground(shape(selected==i?SURFACE:Color.TRANSPARENT,14));tab.setContentDescription(labels[i]+" page");tab.setFocusable(true);tab.setSelected(selected==i);nav.addView(tab,new LinearLayout.LayoutParams(0,dp(52),1));tab.setOnClickListener(v->navigate(page));}
+        currentPageScroll=scroll;
+        lastRenderedScreen=screen;
+        if(restoreY>0)scroll.post(()->{
+            if(currentPageScroll==scroll && screen==lastRenderedScreen)
+                scroll.scrollTo(0,restoreY);
+        });
         if(tour!=null)tour.onRender(root);
     }
 
@@ -159,7 +169,10 @@ public final class ShiftActivity extends Activity {
         microphone.setOnClickListener(v->chooseVoiceLanguage());
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
-        action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
+        action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->
+                StopwatchDelayPicker.show(this,quickDelaySeconds,true,selected->{
+                    quickDelaySeconds=selected;remember();render();
+                }));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         link("Paste message → task",this::pasteMessageTask);
@@ -362,7 +375,7 @@ public final class ShiftActivity extends Activity {
     private void statusIconToggle() {
         LinearLayout box=card();
         Switch control=new Switch(this);
-        control.setText("Show PinTask icon next to the clock");
+        control.setText("Show icon only for active reminders");
         control.setTextSize(16);
         control.setTextColor(FG);
         control.setContentDescription("Status bar icon switch");
@@ -383,7 +396,7 @@ public final class ShiftActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle("Why is the icon missing?")
                 .setMessage(TaskNotifications.statusIconState(this)+
-                        "\\n\\nIf PinTask says Posted, Android received the icon notification. OxygenOS chooses whether to show silent icons beside the clock. Check Settings → Notifications & status bar → Status bar → Notification icons (exact labels may vary). The shortcut never controls your alarm sounds.")
+                        "\\n\\nThe icon stays hidden until a timed reminder actually fires (including your chosen early warning). It clears after Done or Snooze. If PinTask says Posted, OxygenOS may still hide silent icons beside the clock. Check its notification-icon settings. This switch does not change alarm sounds.")
                 .setPositiveButton("Refresh icon",(d,i)->{
                     TaskNotifications.showStatusIcon(this);
                     render();
@@ -588,7 +601,7 @@ public final class ShiftActivity extends Activity {
             });
         });
         action("Or alert me: "+(editorDelaySeconds<0?"Choose a delay  ▾":RelativeDelay.labelSeconds(editorDelaySeconds)+"  ▾"),
-                ()->RelativeDelay.choose(this,false,editorDelaySeconds,selected->{
+                ()->StopwatchDelayPicker.show(this,editorDelaySeconds,false,selected->{
                     remember();editorDelaySeconds=selected;minute=-1;
                     reminder=1;render();
                 }));
