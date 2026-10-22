@@ -126,7 +126,9 @@ public final class AlarmSoundService extends Service {
             // A user could press Done before Android finishes launching the
             // foreground service. A cancelled task must never start ringing.
             if(!activeRequests.contains(taskId)) {
-                stopRinging();
+                // Other concurrently due tasks may still have pending start
+                // commands. Ignore only the already-dismissed alarm.
+                if(activeRequests.isEmpty())stopRinging();
                 return START_NOT_STICKY;
             }
         }
