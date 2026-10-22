@@ -36,6 +36,12 @@ final class VoiceLanguages {
             throw new IllegalArgumentException("Select English, German, or Croatian.");
         String adapted=normalize(spoken,tag);
         SpokenTask parsed=SpokenTask.parse(adapted,now);
+        // Croatian uses "da" before an infinitival-sense task clause
+        // ("da ugasim kompjuter"). Remove it only from the extracted title,
+        // never from the transcript and never from English/German tasks.
+        if("hr-HR".equals(tag) && parsed.title.matches("(?iu)^da\\s+.+")) {
+            parsed=parsed.withTitle(parsed.title.replaceFirst("(?iu)^da\\s+",""));
+        }
         // Preserve exactly what the recognizer returned in the confirmation transcript.
         return parsed.withOriginal(spoken.trim());
     }
@@ -74,6 +80,10 @@ final class VoiceLanguages {
             s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*$",m->clock(m,"de-DE"));
         } else {
             s=replace(s,"^(?:molim\\s+te\\s+)?(?:podsjeti\\s+me\\s+(?:da\\s+)?|podsjeti\\s+me\\s+|moram\\s+|trebam\\s+|treba\\s+mi\\s+)","");
+            // Natural Croatian delay constructions: "za sat vremena" and
+            // "za pola sata" are task due times, not an early-warning amount.
+            s=replace(s,"\\bza\\s+pola\\s+sata(?:\\s+vremena)?\\b","in 30 minutes");
+            s=replace(s,"\\bza\\s+(?:sat|jedan\\s+sat|jednog\\s+sata)(?:\\s+vremena)?\\b","in 1 hour");
             s=replace(s,"\\bpola\\s+sata\\s+(?:prije|ranije)\\b","half an hour before");
             s=replace(s,"\\bpola\\s+sata\\b","30 minutes");
             s=replace(s,"\\b(?:svaki\\s+drugi|svakog\\s+drugog)\\b","every other");
@@ -95,10 +105,20 @@ final class VoiceLanguages {
                     m->"every "+numeral(m.group(1),"hr-HR")+" hours");
             s=replace(s,"\\b(?:dan)\\b","day");
             s=replace(s,"\\b(?:sat)\\b","hour");
-            s=replace(s,"\\b(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\s+(?:prije|ranije)\\b",m->numeral(m.group(1),"hr-HR")+" minutes before");
-            s=replace(s,"\\b(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\s+(?:prije|ranije)\\b",m->numeral(m.group(1),"hr-HR")+" hours before");
-            s=replace(s,"\\bza\\s+(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" minutes");
-            s=replace(s,"\\bza\\s+(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" hours");
+            // Extra spoken request can occur after the task phrase:
+            // "podsjeti me bar pet minuta ranije".
+            // "bar/barem/najmanje" means a minimum; use that stated minimum
+            // and show the editable 5-minute lead in the confirmation.
+            s=replace(s,"\\b(?:(?:podsjeti\\s+me|podsjeti)\\s+)?(?:(?:bar|barem|najmanje)\\s+)?"+
+                    "(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\s+(?:prije|ranije)\\b",
+                    m->numeral(m.group(1),"hr-HR")+" minutes before");
+            s=replace(s,"\\b(?:(?:podsjeti\\s+me|podsjeti)\\s+)?(?:(?:bar|barem|najmanje)\\s+)?"+
+                    "(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sata|sat)\\s+(?:prije|ranije)\\b",
+                    m->numeral(m.group(1),"hr-HR")+" hours before");
+            s=replace(s,"\\bza\\s+(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)(?:\\s+vremena)?\\b",
+                    m->"in "+numeral(m.group(1),"hr-HR")+" minutes");
+            s=replace(s,"\\bza\\s+(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sata|sat)(?:\\s+vremena)?\\b",
+                    m->"in "+numeral(m.group(1),"hr-HR")+" hours");
             s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?(?:\\s+(?:sati|sat)\\b)?",m->clock(m,"hr-HR"));
             s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*$",m->clock(m,"hr-HR"));
         }
