@@ -1,3 +1,12 @@
+# PinTask 3.13-rc1 — Done and Snooze silence the ringing alarm
+
+- **Fix:** Android notification **Done** now silences the independent alarm ringtone service immediately and marks that task complete. Previously it only dismissed/completed the task while a separate foreground ringtone continued for up to 30 seconds.
+- **Fix:** Choosing **Snooze** stops the sound when the snooze is confirmed, then reschedules the task; it does not complete the task. The same cancellation hook covers Done inside the app and on Wear OS.
+- **Android 8+ reliability:** Stop the already-running service with `Context.stopService()`, not `startService(ACTION_STOP)` which background restrictions can reject. The service's `onDestroy()` releases the ringtone and removes its temporary notification.
+- **Simultaneous reminders:** Multiple due alarms share a ringtone; completing one task does not silence another pending active reminder. Stale stop requests are idempotent.
+- **Preserved:** PinTask 3.12's conditional status icon, stopwatch/typing controls, task storage, notifications, exact alarms and optional 30-second direct ringtone, plus voice/Share text. No migration, uninstall or data loss.
+- **Verification:** Automated Android tests cover notification Done completion, Snooze not completing, idempotent repeated Done, concurrent alarms and the exact service-stop request. A real locked-screen OnePlus test is still required.
+
 # PinTask 3.12-rc1 — Task-only status icon, stopwatch immediately, and stable settings scroll
 
 - **Only show the PinTask status icon for real task reminders:** More → Show icon only for active reminders enables an optional task-attention notification. It stays hidden when there are no active timed reminders. It appears when a scheduled task's configured reminder actually fires (including early reminders), remains while that timed task needs attention and clears on Done or Snooze. No unscheduled tasks, paused/silent tasks, distant upcoming tasks or already completed tasks generate a permanent PinTask shortcut.
