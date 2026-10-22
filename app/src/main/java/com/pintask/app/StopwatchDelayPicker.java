@@ -46,7 +46,7 @@ final class StopwatchDelayPicker {
             return toSeconds(h,m,s);
         }
         if(raw.matches("\\d+"))return checkedSeconds((long)RelativeDelay.parse(raw)*60);
-        Pattern segment=Pattern.compile("(\\d+)\\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)\\b");
+        Pattern segment=Pattern.compile("(\\d+)\\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)");
         Matcher m=segment.matcher(raw);
         long seconds=0;
         int cursor=0;
@@ -161,6 +161,21 @@ final class StopwatchDelayPicker {
         typed.setText(display(initial));
         typed.setVisibility(View.GONE);
         content.addView(typed);
+        android.widget.Button presets=new android.widget.Button(activity);
+        presets.setText("Quick presets: 5, 10, 15, 30 or 60 min");
+        presets.setAllCaps(false);
+        presets.setContentDescription("Quick delay presets");
+        presets.setOnClickListener(v->new AlertDialog.Builder(activity)
+                .setTitle("Quick delay")
+                .setItems(new String[]{"5 minutes","10 minutes","15 minutes","30 minutes","1 hour"},
+                        (d,which)->{
+                            int value=new int[]{5,10,15,30,60}[which]*60;
+                            pickers[0].setValue(value/3600);
+                            pickers[1].setValue(value%3600/60);
+                            pickers[2].setValue(0);
+                            method.check(wheelsMode.getId());
+                        }).setNegativeButton("Cancel",null).show());
+        content.addView(presets);
         method.setOnCheckedChangeListener((group,id)->{
             boolean type=id==typeMode.getId();
             wheels.setVisibility(type?View.GONE:View.VISIBLE);
@@ -179,6 +194,15 @@ final class StopwatchDelayPicker {
         preview.setContentDescription("Selected delay");
         preview.setPadding(0,dp(activity,10),0,dp(activity,8));
         content.addView(preview);
+        typed.addTextChangedListener(new android.text.TextWatcher(){
+            @Override public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            @Override public void onTextChanged(CharSequence s,int start,int before,int count){
+                if(!typeMode.isChecked())return;
+                try{preview.setText(display(parseSeconds(s.toString())));}
+                catch(IllegalArgumentException ignored){preview.setText("Enter a valid duration");}
+            }
+            @Override public void afterTextChanged(android.text.Editable value){}
+        });
         TextView hint=label(activity,"The countdown starts when you save the task.",12);
         content.addView(hint);
 
