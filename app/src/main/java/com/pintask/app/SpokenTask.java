@@ -34,6 +34,11 @@ final class SpokenTask {
         return new SpokenTask(title,dueAt,repeatCode,remindBeforeMinutes,heard,schedule);
     }
 
+    /** Remove localized grammatical filler only after schedule extraction succeeds. */
+    SpokenTask withTitle(String localizedTitle) {
+        return new SpokenTask(localizedTitle,dueAt,repeatCode,remindBeforeMinutes,original,schedule);
+    }
+
     private static final Pattern REPEAT=Pattern.compile(
         "\\b(every\\s+other\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"+
         "every\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"+

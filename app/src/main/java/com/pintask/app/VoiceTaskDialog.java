@@ -26,7 +26,7 @@ final class VoiceTaskDialog {
         panel.setPadding(padding,0,padding,0);
         TextView hint=new TextView(activity);
         if("de-DE".equals(language)) hint.setText("Deutsch · Beispiele:\nGeschirr spülen morgen um 13 Uhr\nMüll rausbringen jeden zweiten Dienstag um 08:00\nMedikamente nehmen in 30 Minuten\n\nPrüfe Datum und Uhrzeit vor dem Speichern.");
-        else if("hr-HR".equals(language)) hint.setText("Hrvatski · Primjeri:\nOperi suđe sutra u 13 sati\nIznesi smeće svaki drugi utorak u 08:00\nPopij lijek za 30 minuta\n\nProvjeri datum i vrijeme prije spremanja.");
+        else if("hr-HR".equals(language)) hint.setText("Hrvatski · Primjeri:\nOperi suđe sutra u 13 sati\nIznesi smeće svaki drugi utorak u 08:00\nPopij lijek za 30 minuta\nPodsjeti me za sat vremena da ugasim kompjuter, bar pet minuta ranije\n\nProvjeri datum i vrijeme prije spremanja.");
         else hint.setText("English · Examples:\nWash the dishes today at 13:00\nTake out bins every other Tuesday at 08:00\nTake medication in 30 minutes\n\nRecognition may use your phone's speech service. Review before saving.");
         hint.setTextSize(14);
         hint.setPadding(0,0,0,padding/2);
@@ -54,9 +54,10 @@ final class VoiceTaskDialog {
             }catch(IllegalArgumentException invalid){
                 if(invalid.getMessage()!=null&&(invalid.getMessage().startsWith("Please specify a time")||
                         invalid.getMessage().startsWith("Please add a time"))){
-                    new android.app.TimePickerDialog(activity,(picker,hour,minute)->{
+                    FlexibleTimePicker.clock(activity,9*60,selected->{
                         String corrected=command.getText().toString().trim()+
-                                String.format(java.util.Locale.ROOT," at %02d:%02d",hour,minute);
+                                String.format(java.util.Locale.ROOT," at %02d:%02d",
+                                        selected/60,selected%60);
                         command.setText(corrected);
                         try{
                             SpokenTask amended=VoiceLanguages.parse(corrected,ZonedDateTime.now(),language);
@@ -65,7 +66,7 @@ final class VoiceTaskDialog {
                         }catch(IllegalArgumentException wrong){
                             command.setError(wrong.getMessage());
                         }
-                    },9,0,true).show();
+                    });
                 }else{
                     command.setError(invalid.getMessage());
                     Toast.makeText(activity,invalid.getMessage(),Toast.LENGTH_LONG).show();
@@ -179,53 +180,18 @@ final class VoiceTaskDialog {
         });
         timeButton.setOnClickListener(v->{
             java.time.LocalTime initial=model.time()!=null?model.time():java.time.LocalTime.now();
-            new android.app.TimePickerDialog(activity,(picker,hour,minute)->{
-                model.changeTime(java.time.LocalTime.of(hour,minute),java.time.LocalDate.now());
+            FlexibleTimePicker.clock(activity,initial.getHour()*60+initial.getMinute(),selected->{
+                model.changeTime(java.time.LocalTime.of(selected/60,selected%60),
+                        java.time.LocalDate.now());
                 refresh.run();
-            },initial.getHour(),initial.getMinute(),true).show();
+            });
         });
-        earlyButton.setOnClickListener(v->{
-            String[] options={"At task time","5 minutes before","10 minutes before",
-                    "15 minutes before","30 minutes before","1 hour before",
-                    "Custom minutes before…"};
-            int[] minutes={0,5,10,15,30,60};
-            new AlertDialog.Builder(activity).setTitle("Remind me before")
-                    .setItems(options,(d,which)->{
-                        if(which<minutes.length){
-                            model.changeAdvance(minutes[which]);
-                            refresh.run();
-                        }else{
-                            EditText number=new EditText(activity);
-                            number.setSingleLine(true);
-                            number.setInputType(InputType.TYPE_CLASS_NUMBER);
-                            number.setHint("Minutes before (1–1440)");
-                            number.setText(""+(model.notifyBeforeMinutes()>0?
-                                    model.notifyBeforeMinutes():20));
-                            int padding=dp(activity,20);
-                            LinearLayout wrap=new LinearLayout(activity);
-                            wrap.setOrientation(LinearLayout.VERTICAL);
-                            wrap.setPadding(padding,0,padding,0);
-                            wrap.addView(number);
-                            AlertDialog custom=new AlertDialog.Builder(activity)
-                                    .setTitle("Custom advance reminder")
-                                    .setMessage("How many minutes before the task should the alarm sound?")
-                                    .setView(wrap).setNegativeButton("Cancel",null)
-                                    .setPositiveButton("Set reminder",null).create();
-                            custom.setOnShowListener(shown->
-                                    custom.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(btn->{
-                                try{
-                                    int amount=Integer.parseInt(number.getText().toString().trim());
-                                    model.changeAdvance(amount);
-                                    custom.dismiss();
-                                    refresh.run();
-                                }catch(IllegalArgumentException wrong){
-                                    number.setError("Enter 1–1440 minutes.");
-                                }
-                            }));
-                            custom.show();
-                        }
-                    }).setNegativeButton("Cancel",null).show();
-        });
+        earlyButton.setOnClickListener(v->
+                FlexibleTimePicker.advance(activity,model.notifyBeforeMinutes(),chosen->{
+                    model.changeAdvance(chosen);
+                    refresh.run();
+                }));
+
         repeatButton.setOnClickListener(v->{
             String[] options={
                     "Keep detected · "+model.repeatLabel(),

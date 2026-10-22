@@ -13,6 +13,9 @@ public final class SnoozeActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         long id = getIntent().getLongExtra(TaskNotifications.EXTRA_ID, -1);
+        // The user already tapped Snooze: silence the active sound while they
+        // choose a new time, rather than ringing throughout the picker.
+        AlarmSoundService.stopForTask(this,id);
         new AlertDialog.Builder(this).setTitle("Snooze reminder")
                 .setItems(new String[]{"5 minutes", "15 minutes", "30 minutes", "Tomorrow at this time", "Choose date and time…"}, (d, which) -> {
                     Calendar c = Calendar.getInstance();
