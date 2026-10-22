@@ -467,6 +467,9 @@ public final class TaskNotifications {
     }
 
     public static void cancel(Context context, long id) {
+        // Every existing Done, Snooze and task cancellation path comes here.
+        // Stop only if this is the task whose foreground ringtone is playing.
+        AlarmSoundService.stopForTask(context,id);
         TaskWidget.refreshAll(context);
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
