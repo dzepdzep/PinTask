@@ -5,7 +5,6 @@ import android.content.*;
 import android.media.*;
 import android.net.Uri;
 import android.os.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Explicit opt-in alarm sound, independently of user-muted notification channels.
@@ -24,6 +23,9 @@ public final class AlarmSoundService extends Service {
     private Ringtone ringtone;
     private final Runnable timeout = this::stopRinging;
     private long activeTask;
+    /** Same-process correlation so completing an unrelated task never stops the
+     * alarm of another one. Set before Android starts the service to cover races. */
+    private static volatile long requestedTaskId;
 
     static boolean enabled(Context context) {
         return context.getSharedPreferences("settings",Context.MODE_PRIVATE)
@@ -38,21 +40,32 @@ public final class AlarmSoundService extends Service {
         if(!enabled(context) || !TaskNotifications.canNotify(context))return false;
         try {
             Intent i=new Intent(context,AlarmSoundService.class).setAction(RING).putExtra(ID,taskId);
+            requestedTaskId=taskId;
             context.startForegroundService(i);
             ReminderAudit.note(context,"ringtone_service_requested",taskId,0);
             return true;
         } catch(RuntimeException denied) {
+            if(requestedTaskId==taskId)requestedTaskId=0;
             ReminderAudit.note(context,"ringtone_service_blocked",taskId,0);
             android.util.Log.w("PinTask","Android prevented background alarm playback",denied);
             return false;
         }
     }
     static void stop(Context context) {
+        requestedTaskId=0;
+        // stopService is safe from a notification action in the background:
+        // unlike startService, it does not try to launch a background service.
         try {
-            context.startService(new Intent(context,AlarmSoundService.class).setAction(STOP));
-        } catch(RuntimeException ignored) {
-            // Android may refuse background service starts; existing ring stops at 30s.
+            context.stopService(new Intent(context,AlarmSoundService.class));
+        } catch(RuntimeException failure) {
+            android.util.Log.w("PinTask","Unable to stop active alarm playback",failure);
         }
+    }
+
+    static void stopForTask(Context context,long taskId) {
+        if(taskId<=0 || requestedTaskId!=taskId)return;
+        ReminderAudit.note(context,"ringtone_stop_by_task_action",taskId,0);
+        stop(context);
     }
     private void channel() {
         NotificationManager nm=getSystemService(NotificationManager.class);
@@ -64,7 +77,7 @@ public final class AlarmSoundService extends Service {
         c.setSound(null,null);
         nm.createNotificationChannel(c);
     }
-    private Notification notification() {
+    private Notification notification(long taskId) {
         Intent stop=new Intent(this,AlarmSoundService.class).setAction(STOP);
         PendingIntent action=PendingIntent.getService(this,NOTIFICATION_ID,stop,
                 PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
@@ -81,7 +94,13 @@ public final class AlarmSoundService extends Service {
                 .setOnlyAlertOnce(true)
                 .addAction(new Notification.Action.Builder(
                         android.graphics.drawable.Icon.createWithResource(this,R.drawable.ic_check),
-                        "Stop ringing",action).build())
+                        "Done",TaskNotifications.doneIntent(this,taskId)).build())
+                .addAction(new Notification.Action.Builder(
+                        android.graphics.drawable.Icon.createWithResource(this,R.drawable.ic_pin),
+                        "Snooze",TaskNotifications.snoozeIntent(this,taskId)).build())
+                .addAction(new Notification.Action.Builder(
+                        android.graphics.drawable.Icon.createWithResource(this,R.drawable.ic_pin),
+                        "Stop sound",action).build())
                 .build();
     }
     @Override public void onCreate() {
@@ -101,7 +120,7 @@ public final class AlarmSoundService extends Service {
         if(taskId<=0){stopRinging();return START_NOT_STICKY;}
         try {
             // Must enter foreground promptly before playback on Android 8+.
-            startForeground(NOTIFICATION_ID,notification());
+            startForeground(NOTIFICATION_ID,notification(taskId));
             if(ringtone!=null) {
                 // Already playing for a simultaneously due task; never layer two tones.
                 handler.removeCallbacks(timeout);
@@ -122,6 +141,7 @@ public final class AlarmSoundService extends Service {
                 throw new IllegalStateException("Alarm sound volume is zero");
             ringtone=candidate;
             activeTask=taskId;
+            requestedTaskId=taskId;
             ringtone.play();
             if(!ringtone.isPlaying())
                 throw new IllegalStateException("Alarm ringtone did not start");
@@ -141,11 +161,13 @@ public final class AlarmSoundService extends Service {
             ringtone=null;
             ReminderAudit.note(this,"ringtone_stopped",activeTask,0);
         }
+        if(requestedTaskId==activeTask)requestedTaskId=0;
         activeTask=0;
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
     }
     @Override public void onDestroy() {
+        if(requestedTaskId==activeTask)requestedTaskId=0;
         handler.removeCallbacks(timeout);
         if(ringtone!=null) {
             try {ringtone.stop();} catch(RuntimeException ignored) {}
