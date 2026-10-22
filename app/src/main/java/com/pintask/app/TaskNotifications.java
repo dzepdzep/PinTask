@@ -124,7 +124,7 @@ public final class TaskNotifications {
         return PendingIntent.getActivity(context,2,TaskSections.openIntent(context,id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
 
-    private static PendingIntent doneIntent(Context context, long id) {
+    static PendingIntent doneIntent(Context context, long id) {
         Intent intent = new Intent(context, TaskActionReceiver.class);
         intent.setAction(ACTION_DONE);
         intent.putExtra(EXTRA_ID, id);
@@ -187,7 +187,7 @@ public final class TaskNotifications {
                 priority == TaskStore.PRIORITY_LOW ? "Low priority" : "Normal priority";
     }
 
-    private static PendingIntent snoozeIntent(Context context,long id) {
+    static PendingIntent snoozeIntent(Context context,long id) {
         Intent intent=new Intent(context,SnoozeActivity.class).putExtra(EXTRA_ID,id);
         return PendingIntent.getActivity(context,(int)id,intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
