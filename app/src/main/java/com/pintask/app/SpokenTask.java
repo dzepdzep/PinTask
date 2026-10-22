@@ -34,6 +34,11 @@ final class SpokenTask {
         return new SpokenTask(title,dueAt,repeatCode,remindBeforeMinutes,heard,schedule);
     }
 
+    /** Remove localized grammatical filler only after schedule extraction succeeds. */
+    SpokenTask withTitle(String localizedTitle) {
+        return new SpokenTask(localizedTitle,dueAt,repeatCode,remindBeforeMinutes,original,schedule);
+    }
+
     private static final Pattern REPEAT=Pattern.compile(
         "\\b(every\\s+other\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"+
         "every\\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|"+
@@ -174,7 +179,9 @@ final class SpokenTask {
         String title=working.replaceAll("(?i)\\b(?:on|for)\\s*$","")
                 .replaceAll("^[,;\\s]+","")
                 .replaceAll("(?i)^(?:to|on|for)\\s+","").trim()
-                .replaceAll("[,.;!?]+$","").trim();
+                // Two spoken sentences leave separator punctuation when the
+                // later early-warning clause is removed; none belongs in title.
+                .replaceAll("(?:\\s*[,.;!?]+\\s*)+$","").trim();
         if(title.isEmpty())throw new IllegalArgumentException("Please include what needs doing.");
         if(title.length()>160)throw new IllegalArgumentException("Task name must be 160 characters or less.");
 

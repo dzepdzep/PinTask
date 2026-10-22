@@ -36,16 +36,40 @@ final class VoiceLanguages {
             throw new IllegalArgumentException("Select English, German, or Croatian.");
         String adapted=normalize(spoken,tag);
         SpokenTask parsed=SpokenTask.parse(adapted,now);
+        // Croatian uses "da" before an infinitival-sense task clause
+        // ("da ugasim kompjuter"). Remove it only from the extracted title,
+        // never from the transcript and never from English/German tasks.
+        if("hr-HR".equals(tag) && parsed.title.matches("(?iu)^da\\s+.+")) {
+            parsed=parsed.withTitle(parsed.title.replaceFirst("(?iu)^da\\s+",""));
+        }
         // Preserve exactly what the recognizer returned in the confirmation transcript.
         return parsed.withOriginal(spoken.trim());
     }
 
     static String normalize(String input,String tag) {
         if(input==null||input.trim().isEmpty())return input;
-        if("en-US".equals(tag))return input;
+        if("en-US".equals(tag))return normalizeEnglish(input);
         String s=input.trim().replaceAll("\\s+"," ");
         if("de-DE".equals(tag)){
+            // Convert natural German relative times BEFORE generic noun conversion
+            // (Stunde -> hour) so "in einer Stunde" is not left unparsed.
+            s=replace(s,"\\bin\\s+(?:eine[rnm]?\\s+)?halbe[nr]?\\s+stunde\\b","in 30 minutes");
+            s=replace(s,"\\bin\\s+(\\d{1,3}|[\\p{L}ß]+)\\s+stunden?\\b",
+                    m->"in "+numeral(m.group(1),"de-DE")+" hours");
+            s=replace(s,"\\bin\\s+(\\d{1,4}|[\\p{L}ß]+)\\s+minuten?\\b",
+                    m->"in "+numeral(m.group(1),"de-DE")+" minutes");
             s=replace(s,"^(?:bitte\\s+)?(?:erinnere\\s+mich\\s+(?:daran\\s*,?\\s*(?:dass\\s+ich\\s+)?|an\\s+|zu\\s+)?|ich\\s+(?:muss|möchte|will)\\s+|denk\\s+daran\\s*,?\\s*)","");
+            // A second instruction can repeat the assistant invocation:
+            // "Erinnere mich fünf Minuten vorher" -> "5 minutes before".
+            // Preserve it as an advance warning, never as a second task.
+            s=replace(s,"\\b(?:(?:erinnere|erinner)\\s+mich\\s+(?:bitte\\s+)?(?:nochmal\\s+)?|sag\\s+mir\\s+)?"+
+                    "(?:(?:mindestens|wenigstens|schon|bereits)\\s+)?"+
+                    "(\\d{1,4}|[\\p{L}ß]+)\\s+(?:minuten?|mins?)\\s+(?:vorher|früher|davor)\\b",
+                    m->numeral(m.group(1),"de-DE")+" minutes before");
+            s=replace(s,"\\b(?:(?:erinnere|erinner)\\s+mich\\s+(?:bitte\\s+)?(?:nochmal\\s+)?|sag\\s+mir\\s+)?"+
+                    "(?:(?:mindestens|wenigstens|schon|bereits)\\s+)?"+
+                    "(\\d{1,3}|[\\p{L}ß]+)\\s+stunden?\\s+(?:vorher|früher|davor)\\b",
+                    m->numeral(m.group(1),"de-DE")+" hours before");
             s=replace(s,"\\b(?:eine?\\s+)?halbe\\s+stunde\\s+(?:vorher|früher|davor)\\b","half an hour before");
             s=replace(s,"\\b(?:eine?\\s+)?halbe\\s+stunde\\b","30 minutes");
             s=replace(s,"\\b(?:jeden|jede)\\s+zweiten\\b","every other");
@@ -72,8 +96,15 @@ final class VoiceLanguages {
             s=replace(s,"\\bin\\s+(\\d{1,3}|[\\p{L}ß]+)\\s+(?:stunden?)\\b",m->"in "+numeral(m.group(1),"de-DE")+" hours");
             s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?(?:\\s+uhr\\b)?",m->clock(m,"de-DE"));
             s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*$",m->clock(m,"de-DE"));
+            // "daran, den Computer auszuschalten" is a normal German
+            // complement; "daran" is not the task and must not enter its title.
+            s=replace(s,"\\bdaran\\s*,?\\s*(?=(?:den|die|das|etwas)\\s+)","");
         } else {
             s=replace(s,"^(?:molim\\s+te\\s+)?(?:podsjeti\\s+me\\s+(?:da\\s+)?|podsjeti\\s+me\\s+|moram\\s+|trebam\\s+|treba\\s+mi\\s+)","");
+            // Natural Croatian delay constructions: "za sat vremena" and
+            // "za pola sata" are task due times, not an early-warning amount.
+            s=replace(s,"\\bza\\s+pola\\s+sata(?:\\s+vremena)?\\b","in 30 minutes");
+            s=replace(s,"\\bza\\s+(?:sat|jedan\\s+sat|jednog\\s+sata)(?:\\s+vremena)?\\b","in 1 hour");
             s=replace(s,"\\bpola\\s+sata\\s+(?:prije|ranije)\\b","half an hour before");
             s=replace(s,"\\bpola\\s+sata\\b","30 minutes");
             s=replace(s,"\\b(?:svaki\\s+drugi|svakog\\s+drugog)\\b","every other");
@@ -95,14 +126,58 @@ final class VoiceLanguages {
                     m->"every "+numeral(m.group(1),"hr-HR")+" hours");
             s=replace(s,"\\b(?:dan)\\b","day");
             s=replace(s,"\\b(?:sat)\\b","hour");
-            s=replace(s,"\\b(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\s+(?:prije|ranije)\\b",m->numeral(m.group(1),"hr-HR")+" minutes before");
-            s=replace(s,"\\b(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\s+(?:prije|ranije)\\b",m->numeral(m.group(1),"hr-HR")+" hours before");
-            s=replace(s,"\\bza\\s+(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" minutes");
-            s=replace(s,"\\bza\\s+(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sat)\\b",m->"in "+numeral(m.group(1),"hr-HR")+" hours");
+            // Extra spoken request can occur after the task phrase:
+            // "podsjeti me bar pet minuta ranije".
+            // "bar/barem/najmanje" means a minimum; use that stated minimum
+            // and show the editable 5-minute lead in the confirmation.
+            s=replace(s,"\\b(?:(?:podsjeti\\s+me|podsjeti)\\s+)?(?:(?:bar|barem|najmanje)\\s+)?"+
+                    "(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\s+(?:prije|ranije)\\b",
+                    m->numeral(m.group(1),"hr-HR")+" minutes before");
+            s=replace(s,"\\b(?:(?:podsjeti\\s+me|podsjeti)\\s+)?(?:(?:bar|barem|najmanje)\\s+)?"+
+                    "(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sata|sat)\\s+(?:prije|ranije)\\b",
+                    m->numeral(m.group(1),"hr-HR")+" hours before");
+            s=replace(s,"\\bza\\s+(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)(?:\\s+vremena)?\\b",
+                    m->"in "+numeral(m.group(1),"hr-HR")+" minutes");
+            s=replace(s,"\\bza\\s+(\\d{1,3}|[\\p{L}]+)\\s+(?:sati|sata|sat)(?:\\s+vremena)?\\b",
+                    m->"in "+numeral(m.group(1),"hr-HR")+" hours");
             s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?(?:\\s+(?:sati|sat)\\b)?",m->clock(m,"hr-HR"));
             s=replace(s,"\\bu\\s+(\\d{1,2}|[\\p{L}]+)(:\\d{1,2})?\\s*$",m->clock(m,"hr-HR"));
         }
         return s.replaceAll("\\s+"," ").trim();
+    }
+
+
+    private static String normalizeEnglish(String input) {
+        String s=input.trim().replaceAll("\\s+"," ");
+        // The legacy core parser takes an unambiguous numeric delay. Convert
+        // commonly spoken English numerals, never remove arbitrary task words.
+        s=replace(s,"\\bin\\s+(?:half\\s+an?\\s+hour|an?\\s+half\\s+hour)\\b","in 30 minutes");
+        s=replace(s,"\\bin\\s+(?:an|one)\\s+hour\\b","in 1 hour");
+        s=replace(s,"\\bin\\s+(\\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|"+
+                "fifteen|twenty|thirty|forty|forty-five|fifty|sixty|ninety)\\s+"+
+                "(hours?|minutes?)\\b",m->"in "+englishNumeral(m.group(1))+" "+m.group(2));
+        // "Remind me ... Remind me five minutes earlier." is one reminder
+        // with one due time and one advance offset, NOT two tasks.
+        s=replace(s,"\\b(?:(?:please\\s+)?remind\\s+me\\s+(?:again\\s+)?|"+
+                "notify\\s+me\\s+)?(?:(?:at\\s+least|at\\s+minimum|just)\\s+)?"+
+                "(\\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|"+
+                "fifteen|twenty|thirty|forty|fifty|sixty)\\s+"+
+                "(minutes?|mins?|hours?|hrs?)\\s+"+
+                "(before(?:hand)?|earlier|early|in\\s+advance)\\b",
+                m->englishNumeral(m.group(1))+" "+m.group(2)+" before");
+        return s.replaceAll("\\s+"," ").trim();
+    }
+
+    private static String englishNumeral(String text) {
+        switch(text.toLowerCase(Locale.ROOT)){
+            case "one":return "1";case "two":return "2";case "three":return "3";
+            case "four":return "4";case "five":return "5";case "six":return "6";
+            case "seven":return "7";case "eight":return "8";case "nine":return "9";
+            case "ten":return "10";case "fifteen":return "15";case "twenty":return "20";
+            case "thirty":return "30";case "forty":return "40";case "forty-five":return "45";
+            case "fifty":return "50";case "sixty":return "60";case "ninety":return "90";
+            default:return text;
+        }
     }
 
     private static String clock(Matcher matcher,String language){
