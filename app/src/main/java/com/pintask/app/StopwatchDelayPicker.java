@@ -128,6 +128,7 @@ final class StopwatchDelayPicker {
         wheelsMode.setId(View.generateViewId());
         RadioButton typeMode=new RadioButton(activity);
         typeMode.setText("Type duration");
+        typeMode.setContentDescription("Type stopwatch mode");
         typeMode.setId(View.generateViewId());
         method.addView(wheelsMode,new RadioGroup.LayoutParams(0,dp(activity,48),1));
         method.addView(typeMode,new RadioGroup.LayoutParams(0,dp(activity,48),1));
