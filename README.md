@@ -1,3 +1,11 @@
+# PinTask 3.12-rc1 — Task-only status icon, stopwatch immediately, and stable settings scroll
+
+- **Only show the PinTask status icon for real task reminders:** More → Show icon only for active reminders enables an optional task-attention notification. It stays hidden when there are no active timed reminders. It appears when a scheduled task's configured reminder actually fires (including early reminders), remains while that timed task needs attention and clears on Done or Snooze. No unscheduled tasks, paused/silent tasks, distant upcoming tasks or already completed tasks generate a permanent PinTask shortcut.
+- **Do not pre-post silent reminders:** The conditional status icon is added after the reminder callback marks the task as delivered. The original audible reminder notification channel remains unchanged. The user can turn the indicator off; OxygenOS still controls which silent notification icons it shows at the top of the screen.
+- **Stopwatch is the primary control now:** Tasks → When and the editor's Or alert me open hour/minute/second wheels directly, with Type duration for examples like 1h 17m, 1:17:30, 90 seconds; a Quick presets option remains, and the quick task picker has a Now button. No intermediate list hides the stopwatch.
+- **More page keeps its place:** App settings toggles rebuild the page while restoring its previous vertical scrolling position. Switching to a different page still starts at the top.
+- **No changes to old user task data, language recognition, saved advance reminder minutes or alarm scheduler.** This is an opt-in test candidate, not a verified alarm-audio fix; the OnePlus missing-alarm-sound issue still requires device diagnostics.
+
 # PinTask 3.11-rc1 — Independent alarm ringtone and verifiable icon switch
 
 - **Status icon is a real toggle:** More → Show PinTask icon next to the clock (default off). The adjacent **Status icon diagnostics** distinguishes Off, permission/category blocked, not posted, and posted. PinTask cannot force OxygenOS to display silent notification icons if the device's status-bar settings hide them. Refresh and category-settings shortcuts are provided.
