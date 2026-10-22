@@ -182,9 +182,15 @@ public class SpokenTaskTest {
             assertNotNull(time);
             assertTrue(((android.widget.Button)time).getText().toString().contains("13:00"));
             time.performClick();
-            android.app.TimePickerDialog picker=
-                (android.app.TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
-            picker.updateTime(14,45);
+            AlertDialog picker=ShadowAlertDialog.getLatestAlertDialog();
+            android.widget.NumberPicker hour=(android.widget.NumberPicker)findDescription(
+                    picker.getWindow().getDecorView(),"Clock hour");
+            android.widget.NumberPicker minutes=(android.widget.NumberPicker)findDescription(
+                    picker.getWindow().getDecorView(),"Clock minute");
+            assertNotNull(hour);
+            assertNotNull(minutes);
+            hour.setValue(14);
+            minutes.setValue(45);
             picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             assertTrue(((android.widget.Button)time).getText().toString().contains("14:45"));
@@ -248,7 +254,7 @@ public class SpokenTaskTest {
             assertEquals(0,persisted.recurrence);
         }
     }
-    @Test public void manualAdvancePresetOverridesWhatSpeechRecognitionHeard(){
+    @Test public void manualAdvanceWheelOverridesWhatSpeechRecognitionHeard(){
         try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup();
             TaskStore store=new TaskStore(context)){
             VoiceTaskDialog.editCommand(activity.get(),"Wash dishes tomorrow at 13:00",()->{});
@@ -261,7 +267,15 @@ public class SpokenTaskTest {
             assertNotNull(early);
             early.performClick();
             AlertDialog options=ShadowAlertDialog.getLatestAlertDialog();
-            options.getListView().performItemClick(null,3,3); // 15 min before
+            android.widget.NumberPicker hours=(android.widget.NumberPicker)findDescription(
+                    options.getWindow().getDecorView(),"Reminder hours before");
+            android.widget.NumberPicker minutes=(android.widget.NumberPicker)findDescription(
+                    options.getWindow().getDecorView(),"Reminder minutes before");
+            assertNotNull(hours);
+            assertNotNull(minutes);
+            hours.setValue(0);
+            minutes.setValue(15);
+            options.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             assertTrue(((android.widget.Button)early).getText().toString().contains("15 minutes before"));
             assertEquals(0,store.activeAll().size());

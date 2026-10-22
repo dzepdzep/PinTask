@@ -33,6 +33,9 @@ public final class TaskActionReceiver extends BroadcastReceiver {
             ReminderAudit.note(context,"alarm_callback",id,0);
             ReminderScheduler.deliverDue(context, "alarm");
         } else if (TaskNotifications.ACTION_DONE.equals(action)) {
+            // Silence immediately, even if SQLite completion takes a moment.
+            // The existing TaskNotifications.cancel() covers in-app Done too.
+            AlarmSoundService.stopForTask(context,id);
             try (TaskStore store = new TaskStore(context)) {
                 TaskStore.Completion completion = store.complete(id);
                 ReminderScheduler.cancel(context, id);

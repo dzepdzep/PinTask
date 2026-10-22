@@ -25,7 +25,9 @@ final class ReminderHealth {
         boolean exact=ReminderScheduler.canScheduleExact(a);
         AudioManager audio=a.getSystemService(AudioManager.class);
         int level=audio==null?-1:audio.getStreamVolume(AudioManager.STREAM_ALARM);
-        return "Alarm-clock priority scheduling: "+(ReminderScheduler.alarmClockPriority(a)?"ON":"Off (regular exact/inexact)")+
+        return "Direct alarm ringtone: "+(AlarmSoundService.enabled(a)?"ON · 30-second foreground playback":"Off · notifications only")+
+                "\nAlarm-clock priority scheduling: "+(ReminderScheduler.alarmClockPriority(a)?"ON":"Off (regular exact/inexact)")+
+                "\nStatus bar icon: "+TaskNotifications.statusIconState(a)+
                 "\nNotification permission: "+(notifications?"Allowed":"BLOCKED")+
                 "\nTimed alarm category: "+(channel?"Enabled":"BLOCKED")+
                 "\nAudible alarm channel: "+(audible?"Ready":"SILENT/LOW IMPORTANCE — check category sound")+

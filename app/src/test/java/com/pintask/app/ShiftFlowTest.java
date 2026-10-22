@@ -66,7 +66,7 @@ public class ShiftFlowTest {
     }
     @Test public void dateIsVisibleAndEditableBesideTimeWithoutMoreOptions(){
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
-            find(controller.get().getWindow().getDecorView(),"Add with time or repeat").performClick();View root=controller.get().getWindow().getDecorView();assertTrue(find(root,"Change date").isShown());assertNotNull(find(root,"Date: "+LocalDate.now()));find(root,"Time · Optional").performClick();TimePickerDialog picker=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();Shadows.shadowOf(Looper.getMainLooper()).idle();root=controller.get().getWindow().getDecorView();assertTrue(find(root,"Change date").isShown());assertTrue(find(root,"Date: "+LocalDate.now()).isShown());
+            find(controller.get().getWindow().getDecorView(),"Add with time or repeat").performClick();View root=controller.get().getWindow().getDecorView();assertTrue(find(root,"Change date").isShown());assertNotNull(find(root,"Date: "+LocalDate.now()));find(root,"Time · Optional").performClick();AlertDialog picker=ShadowAlertDialog.getLatestAlertDialog();picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();Shadows.shadowOf(Looper.getMainLooper()).idle();root=controller.get().getWindow().getDecorView();assertTrue(find(root,"Change date").isShown());assertTrue(find(root,"Date: "+LocalDate.now()).isShown());
         }
     }
     @Test public void shiftPageIsSpecificAndSaveTemplateRemainsAtBottomAfterAddingAndRotation(){

@@ -54,8 +54,8 @@ public final class TaskNotifications {
         persistent.setSound(null, null);
         manager.createNotificationChannel(persistent);
         NotificationChannel status = new NotificationChannel(
-                STATUS_CHANNEL,"PinTask status-bar shortcut",NotificationManager.IMPORTANCE_DEFAULT);
-        status.setDescription("Optional PinTask shortcut icon in the status bar; silent and separate from reminder alarms");
+                STATUS_CHANNEL,"PinTask active reminder icon",NotificationManager.IMPORTANCE_DEFAULT);
+        status.setDescription("Shows an optional status-bar icon only while a timed reminder needs attention");
         status.enableVibration(false);
         status.setSound(null,null);
         manager.createNotificationChannel(status);
@@ -124,7 +124,7 @@ public final class TaskNotifications {
         return PendingIntent.getActivity(context,2,TaskSections.openIntent(context,id),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
 
-    private static PendingIntent doneIntent(Context context, long id) {
+    static PendingIntent doneIntent(Context context, long id) {
         Intent intent = new Intent(context, TaskActionReceiver.class);
         intent.setAction(ACTION_DONE);
         intent.putExtra(EXTRA_ID, id);
@@ -187,7 +187,7 @@ public final class TaskNotifications {
                 priority == TaskStore.PRIORITY_LOW ? "Low priority" : "Normal priority";
     }
 
-    private static PendingIntent snoozeIntent(Context context,long id) {
+    static PendingIntent snoozeIntent(Context context,long id) {
         Intent intent=new Intent(context,SnoozeActivity.class).putExtra(EXTRA_ID,id);
         return PendingIntent.getActivity(context,(int)id,intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -311,6 +311,16 @@ public final class TaskNotifications {
                 .edit().putBoolean(STATUS_PREF,enabled).apply();
         showStatusIcon(context);
     }
+    /** The icon represents real attention, never a permanent app shortcut.
+     * Only already-delivered timed reminders count; an upcoming task does not
+     * appear early or silence its eventual first audible notification. */
+    static boolean needsAttention(TaskStore.Task task,long now){
+        return task!=null && !task.done && task.reminderEnabled() &&
+                task.dueAt>0 && task.notifyBeforeMinutes!=TaskStore.REMINDER_OFF &&
+                task.snoozedUntil<=0 && task.remindedAt>0 &&
+                task.notificationAt()<=now;
+    }
+
     static void showStatusIcon(Context context){
         NotificationManager manager=context.getSystemService(NotificationManager.class);
         if(manager==null)return;
@@ -322,18 +332,64 @@ public final class TaskNotifications {
         if(channel==null||channel.getImportance()==NotificationManager.IMPORTANCE_NONE){
             manager.cancel(STATUS_ID);return;
         }
+        TaskStore.Task first=null;
+        int activeCount=0;
+        long now=System.currentTimeMillis();
+        try(TaskStore store=new TaskStore(context)){
+            for(TaskStore.Task task:store.activeAll()){
+                if(!needsAttention(task,now))continue;
+                if(first==null)first=task;
+                activeCount++;
+            }
+        }
+        if(activeCount==0){
+            manager.cancel(STATUS_ID);
+            return;
+        }
+        String title=activeCount==1?"PinTask · Task needs attention":
+                "PinTask · "+activeCount+" tasks need attention";
+        String detail=activeCount==1?
+                (first.dueAt<=now?"Due now: ":"Coming up: ")+first.title:
+                "Tap to review your active reminders";
         Notification notification=new Notification.Builder(context,STATUS_CHANNEL)
                 .setSmallIcon(R.drawable.ic_pin)
-                .setContentTitle("PinTask")
-                .setContentText("Tap to open your tasks")
-                .setContentIntent(open(context))
+                .setContentTitle(title)
+                .setContentText(detail)
+                .setContentIntent(open(context,first.id))
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
-                .setCategory(Notification.CATEGORY_STATUS)
+                .setCategory(Notification.CATEGORY_REMINDER)
                 .build();
         notification.flags|=Notification.FLAG_NO_CLEAR;
         manager.notify(STATUS_ID,notification);
+    }
+
+    private static boolean hasActiveTimedReminder(Context context){
+        long now=System.currentTimeMillis();
+        try(TaskStore store=new TaskStore(context)){
+            for(TaskStore.Task task:store.activeAll())
+                if(needsAttention(task,now))return true;
+        }
+        return false;
+    }
+
+    /** Whether Android accepted our status-bar shortcut notification. Visibility
+     * in the clock area is still controlled by OxygenOS system status-bar settings. */
+    static String statusIconState(Context context) {
+        if(!statusIconEnabled(context))return "Off · enable the switch below";
+        if(!canNotify(context))return "Blocked · enable PinTask app notifications";
+        if(!canNotifyChannel(context,STATUS_CHANNEL))
+            return "Blocked · enable PinTask status-bar shortcut notification category";
+        NotificationManager manager=context.getSystemService(NotificationManager.class);
+        if(manager==null)return "Android notification manager not available";
+        for(android.service.notification.StatusBarNotification notification:manager.getActiveNotifications()) {
+            if(notification.getId()==STATUS_ID && notification.getTag()==null)
+                return "Posted · if no icon appears, check OxygenOS notification icons";
+        }
+        return hasActiveTimedReminder(context)?
+                "Not posted · tap Refresh icon; check notification settings":
+                "Waiting · no active timed reminders (this is normal)";
     }
 
     /** v2 deliberately requires fresh opt-in after older always-on builds. */
@@ -411,11 +467,15 @@ public final class TaskNotifications {
     }
 
     public static void cancel(Context context, long id) {
+        // Every existing Done, Snooze and task cancellation path comes here.
+        // Stop only if this is the task whose foreground ringtone is playing.
+        AlarmSoundService.stopForTask(context,id);
         TaskWidget.refreshAll(context);
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         if (manager == null) return;
         manager.cancel((int) id);
         manager.cancel("undo",(int)id);
         manager.cancel(REMINDER_OFFSET + (int) id);
+        showStatusIcon(context);
     }
 }

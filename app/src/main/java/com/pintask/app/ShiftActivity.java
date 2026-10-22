@@ -25,11 +25,15 @@ public final class ShiftActivity extends Activity {
     private ShiftRepository repository;
     private LinearLayout body;
     private UndoBar undoBar;
+    private ScrollView currentPageScroll;
+    private int lastRenderedScreen=-1;
     private int screen=TASKS,subpage=0;
     private LocalDate date=LocalDate.now(),editorDate=LocalDate.now();
     private long taskRun=0,detailRun=0;
     private String draft="",quickDraft="",editorGroup="";
     private int minute=-1,reminder=0,repeat=0;
+    // 7 = custom minutes; legacy preset positions 0..6 are preserved for guides.
+    private int customAdvanceMinutes=15;
     private int quickDelaySeconds=0, editorDelaySeconds=-1;
     private boolean moreOptions,workEditor,copyingDay;
     private long planTemplateId=0; // 0 = not selected; -1 = Off; positive = saved custom type
@@ -41,7 +45,7 @@ public final class ShiftActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);tour=new ShiftGuide(this);startupAccess=new StartupAccess(this);
-        if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);quickDelaySeconds=state.getInt("quickDelaySeconds",0);editorDelaySeconds=state.getInt("editorDelaySeconds",-1);reminder=state.getInt("reminder");repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
+        if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);quickDelaySeconds=state.getInt("quickDelaySeconds",0);editorDelaySeconds=state.getInt("editorDelaySeconds",-1);reminder=state.getInt("reminder");customAdvanceMinutes=state.getInt("customAdvanceMinutes",15);repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
         if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",0);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
         if(state!=null)tour.restore(state.getBoolean("interactiveTour",false),state.getInt("tourStage",0));
         if(state==null)routeIntent(getIntent());render();
@@ -96,14 +100,40 @@ public final class ShiftActivity extends Activity {
         }
         MessageTaskDialog.editMessage(this,text,()->{quickDraft="";render();});
     }
-    private void remember(){if(quickEntry!=null)quickDraft=quickEntry.getText().toString();if(name!=null){draft=name.getText().toString();reminder=reminders.getSelectedItemPosition();repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition();}}
-    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("quickDelaySeconds",quickDelaySeconds);state.putInt("editorDelaySeconds",editorDelaySeconds);state.putInt("reminder",reminder);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
+    private void remember(){if(quickEntry!=null)quickDraft=quickEntry.getText().toString();if(name!=null){draft=name.getText().toString();if(reminders!=null)reminder=reminders.getSelectedItemPosition();repeat=taskRun==0?RepeatRules.selected(repeats):repeats.getSelectedItemPosition();}}
+
+    private int reminderValue(){
+        return reminder==7?FlexibleTimePicker.checkedAdvance(customAdvanceMinutes):
+                reminder>=0&&reminder<EARLY.length?EARLY[reminder]:TaskStore.REMINDER_OFF;
+    }
+
+    private String reminderLabel(){
+        if(reminder==0)return "Off";
+        return FlexibleTimePicker.advanceLabel(reminderValue());
+    }
+
+    private void chooseExactReminder(){
+        remember();
+        int selected=reminder==7?customAdvanceMinutes:
+                reminder>0&&reminder<EARLY.length?Math.max(EARLY[reminder],0):15;
+        FlexibleTimePicker.advance(this,selected,value->{
+            remember();
+            customAdvanceMinutes=value;
+            reminder=value==0?1:7;
+            if(tour.active()&&tour.stage()==ShiftGuide.CHOOSING_REMINDER)
+                tour.set(ShiftGuide.SAVE);
+            render();
+        });
+    }
+    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("quickDelaySeconds",quickDelaySeconds);state.putInt("editorDelaySeconds",editorDelaySeconds);state.putInt("reminder",reminder);state.putInt("customAdvanceMinutes",customAdvanceMinutes);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
         state.putBoolean("interactiveTour",tour!=null&&tour.active());
         state.putInt("tourStage",tour==null?0:tour.stage());
         super.onSaveInstanceState(state);}
     @Override public void onBackPressed(){if(tour!=null&&tour.active())tour.stop();remember();if(screen==EDITOR)screen=workEditor?WORK:TASKS;else if(screen==HISTORY)screen=MORE;else if(screen==PLAN)screen=WORK;else if(screen==WORK && detailRun!=0)detailRun=0;else if(screen!=TASKS)screen=TASKS;else{super.onBackPressed();return;}render();}
     private void navigate(int page){remember();screen=page;subpage=0;detailRun=0;render();}
     private void render(){
+        final int restoreY=screen==lastRenderedScreen && currentPageScroll!=null?
+                currentPageScroll.getScrollY():0;
         name=null;quickEntry=null;
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
         if(Build.VERSION.SDK_INT>=30)root.setOnApplyWindowInsetsListener((v,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());int keyboard=insets.getInsets(WindowInsets.Type.ime()).bottom;v.setPadding(bars.left,bars.top,bars.right,Math.max(bars.bottom,keyboard));return insets;});else root.setFitsSystemWindows(true);
@@ -115,6 +145,12 @@ public final class ShiftActivity extends Activity {
         LinearLayout nav=new LinearLayout(this);nav.setPadding(dp(12),dp(8),dp(12),dp(10));nav.setBackgroundColor(Color.rgb(16,24,38));root.addView(nav);
         String[] labels={"Tasks","Work","More"};int selected=screen==EDITOR?(workEditor?WORK:TASKS):screen==HISTORY?MORE:screen==PLAN?WORK:screen;
         for(int i=0;i<labels.length;i++){final int page=i;TextView tab=new TextView(this);tab.setText(labels[i]);tab.setGravity(Gravity.CENTER);tab.setTextSize(15);tab.setTypeface(Typeface.DEFAULT,selected==i?Typeface.BOLD:Typeface.NORMAL);tab.setTextColor(selected==i?ACCENT:MUTED);tab.setBackground(shape(selected==i?SURFACE:Color.TRANSPARENT,14));tab.setContentDescription(labels[i]+" page");tab.setFocusable(true);tab.setSelected(selected==i);nav.addView(tab,new LinearLayout.LayoutParams(0,dp(52),1));tab.setOnClickListener(v->navigate(page));}
+        currentPageScroll=scroll;
+        lastRenderedScreen=screen;
+        if(restoreY>0)scroll.post(()->{
+            if(currentPageScroll==scroll && screen==lastRenderedScreen)
+                scroll.scrollTo(0,restoreY);
+        });
         if(tour!=null)tour.onRender(root);
     }
 
@@ -133,7 +169,10 @@ public final class ShiftActivity extends Activity {
         microphone.setOnClickListener(v->chooseVoiceLanguage());
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
-        action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->RelativeDelay.choose(this,true,quickDelaySeconds,selected->{quickDelaySeconds=selected;remember();render();}));
+        action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->
+                StopwatchDelayPicker.show(this,quickDelaySeconds,true,selected->{
+                    quickDelaySeconds=selected;remember();render();
+                }));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         link("Paste message → task",this::pasteMessageTask);
@@ -311,10 +350,12 @@ public final class ShiftActivity extends Activity {
         tool("Watch notifications",TaskNotifications.watchEnabled(this)?"Phone + Wear OS · Done on your watch":"Phone only · pinned task cards",this::watchSettings);
         tool("Reminder timing",ReminderScheduler.canScheduleExact(this)?"Exact-alarm permission granted · Android may still defer during deep sleep":"Permission missing · Android may delay reminders",this::reminderTimingSettings);
         tool("Alarm-clock priority",ReminderScheduler.alarmClockPriority(this)?"On · stronger wake-up scheduling for timed tasks":"Off · optional stronger scheduling for timed tasks",this::alarmPrioritySettings);
-        tool("Status bar icon",TaskNotifications.statusIconEnabled(this)?"On · PinTask shortcut by the clock":"Off · hide PinTask shortcut",this::statusIconSettings);
+        statusIconToggle();
+        tool("Status icon diagnostics",TaskNotifications.statusIconState(this),this::statusIconSettings);
+        alarmSoundToggle();
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.9-rc1",12);
+        text("PinTask 3.13-rc1",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
@@ -331,19 +372,79 @@ public final class ShiftActivity extends Activity {
                         })
                 .setNegativeButton("Cancel",null).show();
     }
+    private void statusIconToggle() {
+        LinearLayout box=card();
+        Switch control=new Switch(this);
+        control.setText("Show icon only for active reminders");
+        control.setTextSize(16);
+        control.setTextColor(FG);
+        control.setContentDescription("Status bar icon switch");
+        control.setChecked(TaskNotifications.statusIconEnabled(this));
+        box.addView(control);
+        TextView note=new TextView(this);
+        note.setText(TaskNotifications.statusIconState(this));
+        note.setTextSize(13);
+        note.setTextColor(MUTED);
+        note.setPadding(0,dp(6),0,0);
+        box.addView(note);
+        control.setOnCheckedChangeListener((view,enabled)->{
+            TaskNotifications.setStatusIconEnabled(this,enabled);
+            render();
+        });
+    }
     private void statusIconSettings() {
         new AlertDialog.Builder(this)
-                .setTitle("PinTask status bar icon")
-                .setMessage("Keep a small PinTask shortcut notification in Android's status bar, beside the clock when Android allows it. Tap to open your tasks. This shortcut is silent, separate from due-task alarm sounds, and does not keep the app running. Some phones hide silent notification icons; check your Android status-bar and notification-category settings if it does not appear. The Quick Add notification remains independently controlled.")
-                .setSingleChoiceItems(new String[]{"Off · No shortcut","On · Show PinTask shortcut"},
-                        TaskNotifications.statusIconEnabled(this)?1:0,(d,selected)->{
-                            TaskNotifications.setStatusIconEnabled(this,selected==1);
-                            d.dismiss();
-                            render();
-                            if(selected==1&&!TaskNotifications.canNotifyChannel(this,TaskNotifications.STATUS_CHANNEL))
-                                toast("Allow the PinTask status-bar shortcut category in Android notification settings.");
-                        })
-                .setNegativeButton("Cancel",null).show();
+                .setTitle("Why is the icon missing?")
+                .setMessage(TaskNotifications.statusIconState(this)+
+                        "\\n\\nThe icon stays hidden until a timed reminder actually fires (including your chosen early warning). It clears after Done or Snooze. If PinTask says Posted, OxygenOS may still hide silent icons beside the clock. Check its notification-icon settings. This switch does not change alarm sounds.")
+                .setPositiveButton("Refresh icon",(d,i)->{
+                    TaskNotifications.showStatusIcon(this);
+                    render();
+                    toast(TaskNotifications.statusIconState(this));
+                })
+                .setNeutralButton("Icon notification settings",(d,i)->{
+                    try{
+                        Intent settings=new Intent(android.provider.Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
+                        settings.putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName());
+                        settings.putExtra(android.provider.Settings.EXTRA_CHANNEL_ID,TaskNotifications.STATUS_CHANNEL);
+                        startActivity(settings);
+                    }catch(RuntimeException unavailable){
+                        startActivity(new Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE,getPackageName()));
+                    }
+                })
+                .setNegativeButton("Close",null).show();
+    }
+    private void alarmSoundToggle() {
+        LinearLayout box=card();
+        Switch control=new Switch(this);
+        control.setText("Also ring with alarm ringtone");
+        control.setContentDescription("Direct alarm ringtone switch");
+        control.setTextColor(FG);
+        control.setTextSize(16);
+        control.setChecked(AlarmSoundService.enabled(this));
+        box.addView(control);
+        TextView hint=new TextView(this);
+        hint.setText(AlarmSoundService.enabled(this)?
+                "On · play an alarm ringtone for up to 30 seconds when a timed alarm fires":
+                "Off · rely on the Android timed-reminder notification sound");
+        hint.setTextSize(13);hint.setTextColor(MUTED);hint.setPadding(0,dp(6),0,0);
+        box.addView(hint);
+        control.setOnCheckedChangeListener((button,enabled)->{
+            if(!enabled){
+                AlarmSoundService.setEnabled(this,false);
+                render();
+                return;
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("Enable separate alarm ringing?")
+                .setMessage("For new timed reminders, PinTask will try to play your phone's alarm ringtone for up to 30 seconds through an Android foreground service, even if the reminder notification category was silenced. Android may still block audio under Do Not Disturb or power restrictions. If notification sounds already work, this could ring twice. Try Reminder health check after enabling.")
+                .setPositiveButton("Enable ringtone",(d,w)->{
+                    AlarmSoundService.setEnabled(this,true);
+                    render();
+                })
+                .setNegativeButton("Cancel",(d,w)->render()).show();
+        });
     }
     private void quickSettings(){new AlertDialog.Builder(this).setTitle("Quick Add notification").setSingleChoiceItems(new String[]{"Off","On"},TaskNotifications.quickAddEnabled(this)?1:0,(d,index)->{TaskNotifications.setQuickAddEnabled(this,index==1);d.dismiss();render();if(index==1 && Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},42);}).setNegativeButton("Cancel",null).show();}
     private void historyPage(){heading("Completed tasks","Your task history");link("‹ Back to More",()->navigate(MORE));try(TaskStore store=new TaskStore(this)){List<TaskStore.Task> done=store.completedAll();if(done.isEmpty())empty("Nothing completed yet","Finished tasks will appear here.");for(TaskStore.Task task:done)body.addView(TaskCards.done(this,task,this::render));}}
@@ -491,30 +592,32 @@ public final class ShiftActivity extends Activity {
         });
         action(minute<0?"Time · Optional":("Time · "+String.format(Locale.ROOT,"%02d:%02d",minute/60,minute%60)),()->{
             remember(); int initial=minute<0?LocalTime.now().getHour()*60:minute;
-            TimePickerDialog picker=new TimePickerDialog(this,(v,h,m)->{
+            FlexibleTimePicker.clock(this,initial,chosen->{
                 // A chosen time is an audible reminder by default, never silently "No reminder".
                 if(minute<0 && reminder==0)reminder=1;
-                minute=h*60+m;editorDelaySeconds=-1;
+                minute=chosen;editorDelaySeconds=-1;
                 if(tour.active()&&tour.stage()==ShiftGuide.TIME_PICKER)tour.set(ShiftGuide.MORE);
                 render();
-            },initial/60,initial%60,true);
-            picker.setOnCancelListener(d->tour.cancelled(ShiftGuide.TIME_PICKER,ShiftGuide.TIME));
-            picker.show();
+            });
         });
         action("Or alert me: "+(editorDelaySeconds<0?"Choose a delay  ▾":RelativeDelay.labelSeconds(editorDelaySeconds)+"  ▾"),
-                ()->RelativeDelay.choose(this,false,editorDelaySeconds,selected->{
+                ()->StopwatchDelayPicker.show(this,editorDelaySeconds,false,selected->{
                     remember();editorDelaySeconds=selected;minute=-1;
                     reminder=1;render();
                 }));
         if(editorDelaySeconds>=0)text("The alarm counts from when you save this task."+
                 (taskRun>0?" It must be inside the selected shift.":""),13);
-        if(minute>=0 || editorDelaySeconds>=0)text("Alarm: "+(reminder==0?"Off (tap More options to enable)":reminder==1?"At task time":new String[]{"","At task time","5 minutes early","10 minutes early","15 minutes early","30 minutes early","1 hour early"}[reminder]),14);
+        if(minute>=0 || editorDelaySeconds>=0){
+            text("Alarm: "+reminderLabel(),14);
+            action("Remind me earlier · Scroll or type  ▾",this::chooseExactReminder);
+        }
         link(moreOptions?"Less options":"More options",()->{remember();moreOptions=!moreOptions;render();});
         main.addView(advanced);advanced.setVisibility(moreOptions?View.VISIBLE:View.GONE);body=advanced;
         if(run!=null && !dateOf(run.startsAt).equals(dateOf(run.endsAt)))text("After-midnight times belong to the next morning of this shift.",14);
         if(minute>=0 || editorDelaySeconds>=0) action("Remove time",()->{remember();minute=-1;editorDelaySeconds=-1;reminder=0;repeat=0;render();});
         text("Reminder · Optional",15);
-        reminders=spinner(new String[]{"No reminder","At task time","5 minutes before","10 minutes before","15 minutes before","30 minutes before","1 hour before"},reminder);
+        reminders=spinner(new String[]{"No reminder","At task time","5 minutes before","10 minutes before","15 minutes before","30 minutes before","1 hour before","Custom · "+FlexibleTimePicker.advanceLabel(customAdvanceMinutes)},reminder);
+        action("Custom advance reminder · Scroll or type  ▾",this::chooseExactReminder);
         if(tour.active()){
             reminders.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
                 @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int index,long id){
@@ -580,15 +683,21 @@ public final class ShiftActivity extends Activity {
             if(draft.trim().isEmpty()) { name.setError("Enter a task name"); return; }
             if(minute<0 && editorDelaySeconds<0 && (reminder>0 || repeat>0))
                 throw new IllegalArgumentException("Choose a time or delay for reminders or repeats");
+            if(editorDelaySeconds>=0 && reminderValue()>0 &&
+                    (long)editorDelaySeconds*1000L <= (long)reminderValue()*60_000L)
+                throw new IllegalArgumentException("The advance reminder would already be past. Choose a longer delay or remind closer to task time.");
             if(taskRun>0) {
                 if(editorDelaySeconds>=0)
-                    repository.addTaskAfterSeconds(taskRun,draft,editorDelaySeconds,INTERVALS[repeat],EARLY[reminder]);
-                else repository.addTask(taskRun,draft,minute,INTERVALS[repeat],EARLY[reminder]);
+                    repository.addTaskAfterSeconds(taskRun,draft,editorDelaySeconds,INTERVALS[repeat],reminderValue());
+                else repository.addTask(taskRun,draft,minute,INTERVALS[repeat],reminderValue());
             } else {
                 long due=editorDelaySeconds>=0?System.currentTimeMillis()+editorDelaySeconds*1000L:
                         minute<0?0:editorDate.atTime(minute/60,minute%60).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
                 if(due>0 && due<=System.currentTimeMillis()) throw new IllegalArgumentException("Choose a future time");
-                try(TaskStore store=new TaskStore(this)) { android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();try{TaskStore.Task created=store.add(draft,1,due,repeat,EARLY[reminder]);store.setGroup(created.id,workEditor?(editorGroup.isEmpty()?"Work":editorGroup):"");db.setTransactionSuccessful();}finally{db.endTransaction();} }
+                if(due>0 && reminderValue()>0 &&
+                        due - (long)reminderValue()*60_000L <= System.currentTimeMillis())
+                    throw new IllegalArgumentException("The early reminder time has already passed. Choose a later task time or shorter advance.");
+                try(TaskStore store=new TaskStore(this)) { android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();try{TaskStore.Task created=store.add(draft,1,due,repeat,reminderValue());store.setGroup(created.id,workEditor?(editorGroup.isEmpty()?"Work":editorGroup):"");db.setTransactionSuccessful();}finally{db.endTransaction();} }
             }
             if(workEditor && taskRun==0 && editorGroup.isEmpty() && "".equals(TaskGroups.selected(this)))TaskGroups.select(this,"Work");
             boolean wantsReminder=reminder>0;
