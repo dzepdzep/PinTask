@@ -27,7 +27,7 @@ final class VoiceTaskDialog {
         TextView hint=new TextView(activity);
         if("de-DE".equals(language)) hint.setText("Deutsch · Beispiele:\nGeschirr spülen morgen um 13 Uhr\nMüll rausbringen jeden zweiten Dienstag um 08:00\nMedikamente nehmen in 30 Minuten\nErinnere mich in einer Stunde daran, den Computer auszuschalten. Erinnere mich fünf Minuten vorher.\n\nPrüfe Datum und Uhrzeit vor dem Speichern.");
         else if("hr-HR".equals(language)) hint.setText("Hrvatski · Primjeri:\nOperi suđe sutra u 13 sati\nIznesi smeće svaki drugi utorak u 08:00\nPopij lijek za 30 minuta\nPodsjeti me za sat vremena da ugasim kompjuter, bar pet minuta ranije\n\nProvjeri datum i vrijeme prije spremanja.");
-        else hint.setText("English · Examples:\nWash the dishes today at 13:00\nTake out bins every other Tuesday at 08:00\nTake medication in 30 minutes\n\nRecognition may use your phone's speech service. Review before saving.");
+        else hint.setText("English · Examples:\nWash the dishes today at 13:00\nTake out bins every other Tuesday at 08:00\nTake medication in 30 minutes\nRemind me in an hour to turn off the computer. Remind me five minutes earlier.\n\nRecognition may use your phone's speech service. Review before saving.");
         hint.setTextSize(14);
         hint.setPadding(0,0,0,padding/2);
         panel.addView(hint);
