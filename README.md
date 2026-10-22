@@ -1,3 +1,12 @@
+# PinTask 3.13-rc1 — Done / Snooze stops the ringing alarm
+
+- **Confirmed by user:** Opt-in independent alarm ringtone can be heard on their OnePlus/Android 16; however, the alarm continued after Done on the reminder notification.
+- **Done:** Both the normal pinned task notification and the temporary ringing foreground notification's Done action complete the task and immediately stop its associated ringtone, without completing unrelated tasks. The same works from task completion inside the app through the existing shared notification-cancellation path.
+- **Snooze:** Selecting Snooze on either notification silences immediately before showing the 5/15/30-minute, tomorrow, or custom time chooser; confirming a time schedules a new reminder without completing the task.
+- **Stop sound:** The foreground ringing notification also provides an explicit Stop sound control. This silences playback **only**, leaving the task pending until Done or Snooze.
+- **Android compatibility:** The stop request uses `Context.stopService()` instead of trying to start a service in the background, which could be rejected on Android 16. Only the currently ringing task can stop its playback when completed. Foreground service playback limits, notification channels, exact scheduling, voice recognition, custom time pickers and existing task data are unchanged.
+- **Safety:** Includes automated tests for Done, Snooze, unrelated tasks, and stop request. Install as an update, never uninstall to migrate tasks. The behavior still requires actual OnePlus locked-screen verification before calling it fully confirmed.
+
 # PinTask 3.12-rc1 — Task-only status icon, stopwatch immediately, and stable settings scroll
 
 - **Only show the PinTask status icon for real task reminders:** More → Show icon only for active reminders enables an optional task-attention notification. It stays hidden when there are no active timed reminders. It appears when a scheduled task's configured reminder actually fires (including early reminders), remains while that timed task needs attention and clears on Done or Snooze. No unscheduled tasks, paused/silent tasks, distant upcoming tasks or already completed tasks generate a permanent PinTask shortcut.
