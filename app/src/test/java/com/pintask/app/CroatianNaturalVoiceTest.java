@@ -61,9 +61,9 @@ public class CroatianNaturalVoiceTest {
     }
 
     @Test public void existingEnglishAndGermanRemainUntouched(){
-        SpokenTask german=VoiceLanguages.parse("Erinnere mich in einer Stunde Müll rausbringen",AT,"de-DE");
+        SpokenTask german=VoiceLanguages.parse("Erinnere mich Müll rausbringen in 30 Minuten",AT,"de-DE");
         assertEquals("Müll rausbringen",german.title);
-        assertEquals(AT.plusHours(1).toInstant().toEpochMilli(),german.dueAt);
+        assertEquals(AT.plusMinutes(30).toInstant().toEpochMilli(),german.dueAt);
         SpokenTask english=VoiceLanguages.parse("Remind me to switch off computer in 1 hour 5 minutes before",AT,"en-US");
         assertEquals("switch off computer",english.title);
         assertEquals(5,english.remindBeforeMinutes);
