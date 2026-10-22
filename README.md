@@ -1,3 +1,11 @@
+# PinTask 3.15-rc1 — Natural English and German spoken task reminders
+
+- English now understands normal spoken delay expressions including **"in an hour"**, "in half an hour", "in two hours", "in thirty minutes", and secondary clauses such as **"Remind me five minutes earlier"** and "notify me at least ten minutes beforehand".
+- German now handles **"in einer Stunde"**, "in einer halben Stunde", number words in relative delays, and independent early warnings such as **"Erinnere mich fünf Minuten vorher"**, "mindestens zehn Minuten vorher". Handles the grammatical filler in **"daran, den Computer auszuschalten"**, preserving the meaningful task name.
+- Both map the main time and separate early warning to **one task with one due time**. E.g. task due in 60 minutes, alarm in 55 minutes. Review still shows the exact originally recognized transcript, lets users correct title/time/early warnings, and requires explicit confirmation.
+- Existing Croatian grammar, English/German past formats, saved SQLite tasks, working alarm sound, Done/Snooze/Stop sound, status-icon condition and time pickers are unchanged.
+- Ambiguous schedules, duplicate advance phrases and warnings in the past are still rejected conservatively. Android speech recognizer is outside the app; correctly transcribed text is required, with editable fallback.
+
 # PinTask 3.14-rc1 — Natural Croatian voice reminders with advance warnings
 
 - Croatian (hr-HR) text can now understand **“podsjeti me za sat vremena da ugasim kompjuter podsjeti me bar pet minuta ranije”**. The task is due in one hour, the alarm is scheduled **five minutes before** that due time, the task title is **“ugasim kompjuter”**, and the entire originally recognized transcript is shown for correction before saving.
