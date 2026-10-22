@@ -4,6 +4,13 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Typeface;
 import android.view.Gravity;
+import android.view.View;
+import android.text.InputFilter;
+import android.text.InputType;
+import android.widget.EditText;
+import android.widget.RadioGroup;
+import android.widget.RadioButton;
+import java.util.regex.*;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.NumberPicker;
@@ -26,6 +33,49 @@ final class StopwatchDelayPicker {
         if(sum<1||sum>MAX_SECONDS)
             throw new IllegalArgumentException("Select a duration from 1 second to 30 days");
         return (int)sum;
+    }
+
+    /** Typed input: plain numbers are minutes, HH:MM[:SS] is a duration.
+     * Units can be combined: 1h 5m 20s, 90 seconds, 2 hours. */
+    static int parseSeconds(String value) {
+        String raw=value==null?"":value.trim().toLowerCase(Locale.ROOT);
+        if(raw.matches("\\d{1,3}:\\d{2}(?::\\d{2})?")) {
+            String[] p=raw.split(":");
+            int h=Integer.parseInt(p[0]),m=Integer.parseInt(p[1]);
+            int s=p.length==3?Integer.parseInt(p[2]):0;
+            return toSeconds(h,m,s);
+        }
+        if(raw.matches("\\d+"))return checkedSeconds((long)RelativeDelay.parse(raw)*60);
+        Pattern segment=Pattern.compile("(\\d+)\\s*(hours?|hrs?|h|minutes?|mins?|m|seconds?|secs?|s)");
+        Matcher m=segment.matcher(raw);
+        long seconds=0;
+        int cursor=0;
+        boolean any=false;
+        while(m.find()){
+            String skipped=raw.substring(cursor,m.start()).replaceAll("[\\s,]+","")
+                    .replace("and","");
+            if(!skipped.isEmpty())throw new IllegalArgumentException("Type e.g. 15m, 1:30:20 or 1h 30m.");
+            long n=Long.parseLong(m.group(1));
+            String unit=m.group(2);
+            long multiplier=unit.startsWith("h")?3600:unit.startsWith("m")?60:1;
+            if(n>MAX_SECONDS)throw new IllegalArgumentException("Maximum delay is 30 days");
+            seconds+=n*multiplier;
+            any=true;cursor=m.end();
+        }
+        if(!any||!raw.substring(cursor).trim().isEmpty()) {
+            // Existing decimal formats remain supported in the app's relative picker.
+            try{return checkedSeconds((long)RelativeDelay.parse(raw)*60);}
+            catch(IllegalArgumentException ignored){
+                throw new IllegalArgumentException("Type e.g. 15m, 1:30:20, 90s or 1h 30m.");
+            }
+        }
+        return checkedSeconds(seconds);
+    }
+
+    private static int checkedSeconds(long seconds){
+        if(seconds<1||seconds>MAX_SECONDS)
+            throw new IllegalArgumentException("Select a duration from 1 second to 30 days.");
+        return (int)seconds;
     }
 
     private static int dp(Activity activity,int value) {
@@ -56,6 +106,10 @@ final class StopwatchDelayPicker {
     }
 
     static void show(Activity activity,int selectedSeconds,IntConsumer saveSeconds) {
+        show(activity,selectedSeconds,false,saveSeconds);
+    }
+
+    static void show(Activity activity,int selectedSeconds,boolean allowNow,IntConsumer saveSeconds) {
         int initial=selectedSeconds>0?Math.min(selectedSeconds,MAX_SECONDS):15*60;
         int[] h={initial/3600},m={(initial%3600)/60},s={initial%60};
         NumberPicker[] pickers=new NumberPicker[3];
@@ -66,6 +120,19 @@ final class StopwatchDelayPicker {
         TextView guidance=label(activity,"Scroll the wheels to choose a duration",14);
         guidance.setPadding(0,0,0,dp(activity,8));
         content.addView(guidance);
+
+        RadioGroup method=new RadioGroup(activity);
+        method.setOrientation(RadioGroup.HORIZONTAL);
+        RadioButton wheelsMode=new RadioButton(activity);
+        wheelsMode.setText("Scroll wheels");
+        wheelsMode.setId(View.generateViewId());
+        RadioButton typeMode=new RadioButton(activity);
+        typeMode.setText("Type duration");
+        typeMode.setContentDescription("Type stopwatch mode");
+        typeMode.setId(View.generateViewId());
+        method.addView(wheelsMode,new RadioGroup.LayoutParams(0,dp(activity,48),1));
+        method.addView(typeMode,new RadioGroup.LayoutParams(0,dp(activity,48),1));
+        content.addView(method);
 
         LinearLayout wheels=new LinearLayout(activity);
         wheels.setGravity(Gravity.CENTER);
@@ -86,28 +153,67 @@ final class StopwatchDelayPicker {
             wheels.addView(cell,new LinearLayout.LayoutParams(0,-2,1));
         }
         content.addView(wheels);
+        EditText typed=new EditText(activity);
+        typed.setSingleLine(true);
+        typed.setContentDescription("Type stopwatch duration");
+        typed.setHint("15m, 1:30:20 or 1h 30m");
+        typed.setInputType(InputType.TYPE_CLASS_TEXT);
+        typed.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
+        typed.setText(display(initial));
+        typed.setVisibility(View.GONE);
+        content.addView(typed);
+        android.widget.Button presets=new android.widget.Button(activity);
+        presets.setText("Quick presets: 5, 10, 15, 30 or 60 min");
+        presets.setAllCaps(false);
+        presets.setContentDescription("Quick delay presets");
+        presets.setOnClickListener(v->new AlertDialog.Builder(activity)
+                .setTitle("Quick delay")
+                .setItems(new String[]{"5 minutes","10 minutes","15 minutes","30 minutes","1 hour"},
+                        (d,which)->{
+                            int value=new int[]{5,10,15,30,60}[which]*60;
+                            pickers[0].setValue(value/3600);
+                            pickers[1].setValue(value%3600/60);
+                            pickers[2].setValue(0);
+                            method.check(wheelsMode.getId());
+                        }).setNegativeButton("Cancel",null).show());
+        content.addView(presets);
+        method.setOnCheckedChangeListener((group,id)->{
+            boolean type=id==typeMode.getId();
+            wheels.setVisibility(type?View.GONE:View.VISIBLE);
+            typed.setVisibility(type?View.VISIBLE:View.GONE);
+            if(type){
+                int current=pickers[0].getValue()*3600+
+                        pickers[1].getValue()*60+pickers[2].getValue();
+                typed.setText(display(current));
+                typed.setSelection(typed.length());
+            }
+        });
+        method.check(wheelsMode.getId());
 
         TextView preview=label(activity,display(initial),29);
         preview.setTypeface(Typeface.MONOSPACE,Typeface.BOLD);
         preview.setContentDescription("Selected delay");
         preview.setPadding(0,dp(activity,10),0,dp(activity,8));
         content.addView(preview);
+        typed.addTextChangedListener(new android.text.TextWatcher(){
+            @Override public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+            @Override public void onTextChanged(CharSequence s,int start,int before,int count){
+                if(!typeMode.isChecked())return;
+                try{preview.setText(display(parseSeconds(s.toString())));}
+                catch(IllegalArgumentException ignored){preview.setText("Enter a valid duration");}
+            }
+            @Override public void afterTextChanged(android.text.Editable value){}
+        });
         TextView hint=label(activity,"The countdown starts when you save the task.",12);
         content.addView(hint);
 
-        AlertDialog dialog=new AlertDialog.Builder(activity)
-                .setTitle("Custom delay · Stopwatch")
+        AlertDialog.Builder builder=new AlertDialog.Builder(activity)
+                .setTitle("Choose alert delay · Stopwatch")
                 .setView(content)
                 .setNegativeButton("Cancel",null)
-                .setPositiveButton("Set delay",(d,w)->{
-                    try{
-                        int duration=toSeconds(pickers[0].getValue(),pickers[1].getValue(),pickers[2].getValue());
-                        saveSeconds.accept(duration);
-                    }catch(IllegalArgumentException wrong){
-                        // Protect against invalid values even if the OS dispatches a disabled button.
-                        android.widget.Toast.makeText(activity,wrong.getMessage(),android.widget.Toast.LENGTH_LONG).show();
-                    }
-                }).create();
+                .setPositiveButton("Set delay",null);
+        if(allowNow)builder.setNeutralButton("Now",(d,w)->saveSeconds.accept(0));
+        AlertDialog dialog=builder.create();
         for(NumberPicker picker:pickers){
             picker.setOnValueChangedListener((view,oldValue,newValue)->{
                 int total=pickers[0].getValue()*3600+pickers[1].getValue()*60+pickers[2].getValue();
@@ -121,6 +227,18 @@ final class StopwatchDelayPicker {
                 activity.getSystemService(android.view.inputmethod.InputMethodManager.class);
         if(keyboard!=null)keyboard.hideSoftInputFromWindow(activity.getWindow().getDecorView().getWindowToken(),0);
         dialog.show();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            try{
+                int duration=typeMode.isChecked()?
+                        parseSeconds(typed.getText().toString()):
+                        toSeconds(pickers[0].getValue(),pickers[1].getValue(),pickers[2].getValue());
+                saveSeconds.accept(duration);
+                dialog.dismiss();
+            }catch(IllegalArgumentException wrong){
+                if(typeMode.isChecked())typed.setError(wrong.getMessage());
+                android.widget.Toast.makeText(activity,wrong.getMessage(),android.widget.Toast.LENGTH_LONG).show();
+            }
+        });
         if(dialog.getWindow()!=null)dialog.getWindow().setSoftInputMode(
                 android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
     }
