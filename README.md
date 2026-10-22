@@ -1,3 +1,12 @@
+# PinTask 3.14-rc1 — Natural Croatian voice reminders with advance warnings
+
+- Croatian (hr-HR) text can now understand **“podsjeti me za sat vremena da ugasim kompjuter podsjeti me bar pet minuta ranije”**. The task is due in one hour, the alarm is scheduled **five minutes before** that due time, the task title is **“ugasim kompjuter”**, and the entire originally recognized transcript is shown for correction before saving.
+- Adds “za sat vremena”, “za jedan sat”, “za dva sata”, “za pola sata”, optional “vremena”, and normal minimum-lead phrases like “bar/barem/najmanje pet minuta ranije/prije”, including natural second “podsjeti me” clauses.
+- Localized “da” before a task clause is stripped **only** from extracted Croatian task names; English/German titles and the full recognized text remain unchanged.
+- Preserves the conservative parser: ambiguous or contradictory times fail validation, and early alerts that would already be due cannot be saved. No automatic task creation from speech without explicit confirmation.
+- Android's external speech recognition must transcribe the actual words reasonably; if not, the existing editable transcript lets the user correct them. No cloud service added.
+- No changes to working ringtone playback, Done/Snooze stop actions, notification channels, scheduled alarms, custom stopwatch/time pickers, other languages, saved tasks or SQLite schema.
+
 # PinTask 3.13-rc1 — Done / Snooze stops the ringing alarm
 
 - **Confirmed by user:** Opt-in independent alarm ringtone can be heard on their OnePlus/Android 16; however, the alarm continued after Done on the reminder notification.
