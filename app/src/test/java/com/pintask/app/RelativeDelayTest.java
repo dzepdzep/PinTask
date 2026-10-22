@@ -66,8 +66,6 @@ public class RelativeDelayTest {
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
             View root=controller.get().getWindow().getDecorView();
             find(root,"When: Now  ▾").performClick();
-            AlertDialog menu=ShadowAlertDialog.getLatestAlertDialog();
-            menu.getListView().performItemClick(null,6,6);
             AlertDialog stopwatch=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(stopwatch);
             NumberPicker hour=findWheel(stopwatch.getWindow().getDecorView(),"Delay hours");
@@ -94,6 +92,49 @@ public class RelativeDelayTest {
             assertEquals(0,saved.notifyBeforeMinutes);
             assertEquals(1,org.robolectric.Shadows.shadowOf(alarms).getScheduledAlarms().size());
             assertNull(org.robolectric.Shadows.shadowOf(notifications).getNotification((int)saved.id));
+        }
+    }
+
+    @Test public void typedStopwatchSupportsExactSecondsAndLongDurations(){
+        assertEquals(5412,StopwatchDelayPicker.parseSeconds("01:30:12"));
+        assertEquals(5400,StopwatchDelayPicker.parseSeconds("1h30m"));
+        assertEquals(5412,StopwatchDelayPicker.parseSeconds("1h 30m 12s"));
+        assertEquals(90,StopwatchDelayPicker.parseSeconds("90 seconds"));
+        assertEquals(600,StopwatchDelayPicker.parseSeconds("10"));
+        assertEquals(30*24*3600,StopwatchDelayPicker.parseSeconds("720:00:00"));
+        for(String input:new String[]{"0","00:00:00","24:60:00","720:00:01","hello","1:99"}) {
+            assertThrows(input,IllegalArgumentException.class,
+                    ()->StopwatchDelayPicker.parseSeconds(input));
+        }
+    }
+
+    @Test public void quickStopwatchShowsWheelsAndNowButtonDirectly() {
+        try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
+            find(controller.get().getWindow().getDecorView(),"When: Now  ▾").performClick();
+            AlertDialog stopwatch=ShadowAlertDialog.getLatestAlertDialog();
+            assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay hours"));
+            assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay minutes"));
+            assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay seconds"));
+            assertNotNull(stopwatch.getButton(AlertDialog.BUTTON_NEUTRAL));
+        }
+    }
+
+    @Test public void typedStopwatchValueIsSavedAfterUserConfirms() {
+        try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
+            find(controller.get().getWindow().getDecorView(),"When: Now  ▾").performClick();
+            AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
+            android.widget.RadioButton typed=(android.widget.RadioButton)findDescription(
+                    dialog.getWindow().getDecorView(),"Type stopwatch mode");
+            assertNotNull(typed);
+            typed.setChecked(true);
+            EditText field=(EditText)findDescription(
+                    dialog.getWindow().getDecorView(),"Type stopwatch duration");
+            assertNotNull(field);
+            field.setText("1:17:20");
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertNotNull(find(controller.get().getWindow().getDecorView(),
+                    "When: In 1h 17m 20s  ▾"));
         }
     }
 
@@ -136,7 +177,11 @@ public class RelativeDelayTest {
             View root=controller.get().getWindow().getDecorView();
             find(root,"When: Now  ▾").performClick();
             AlertDialog select=ShadowAlertDialog.getLatestAlertDialog();
-            select.getListView().performItemClick(null,2,2); // Now, 5, 10
+            NumberPicker minutes=findWheel(select.getWindow().getDecorView(),"Delay minutes");
+            assertNotNull(minutes);
+            minutes.setValue(10);
+            select.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             root=controller.get().getWindow().getDecorView();
             assertNotNull(find(root,"When: In 10 minutes  ▾"));
             firstTextField(root).setText("Ten minute task");
