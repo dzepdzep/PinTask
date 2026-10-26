@@ -122,6 +122,7 @@ public class QuickCaptureWidgetTest {
             Shadows.shadowOf(Looper.getMainLooper()).idle();
             ShadowAlertDialog.getLatestAlertDialog()
                     .getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertTrue(activity.get().isFinishing());
         }
     }
@@ -161,6 +162,7 @@ public class QuickCaptureWidgetTest {
             Shadows.shadowOf(Looper.getMainLooper()).idle();
             ShadowAlertDialog.getLatestAlertDialog()
                     .getButton(AlertDialog.BUTTON_NEGATIVE).performClick();
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
             assertEquals(0,store.activeAll().size());
             assertTrue(activity.get().isFinishing());
         }
