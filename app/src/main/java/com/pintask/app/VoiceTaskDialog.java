@@ -20,6 +20,12 @@ final class VoiceTaskDialog {
     }
 
     static void editCommand(Activity activity,String initial,String language,Runnable saved) {
+        editCommand(activity,initial,language,saved,()->{});
+    }
+
+    /** Standalone home-widget entry can close without exposing the full app. */
+    static void editCommand(Activity activity,String initial,String language,
+                            Runnable saved,Runnable cancelled) {
         LinearLayout panel=new LinearLayout(activity);
         panel.setOrientation(LinearLayout.VERTICAL);
         int padding=Math.round(20*activity.getResources().getDisplayMetrics().density);
@@ -43,14 +49,15 @@ final class VoiceTaskDialog {
         AlertDialog dialog=new AlertDialog.Builder(activity)
                 .setTitle("Voice task · Check transcript")
                 .setView(panel)
-                .setNegativeButton("Cancel",null)
+                .setNegativeButton("Cancel",(d,w)->cancelled.run())
+                .setOnCancelListener(d->cancelled.run())
                 .setPositiveButton("Review schedule",null).create();
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
             try{
                 String spoken=command.getText().toString();
                 SpokenTask parsed=VoiceLanguages.parse(spoken,ZonedDateTime.now(),language);
                 dialog.dismiss();
-                review(activity,parsed,saved);
+                review(activity,parsed,saved,false,language,cancelled);
             }catch(IllegalArgumentException invalid){
                 if(invalid.getMessage()!=null&&(invalid.getMessage().startsWith("Please specify a time")||
                         invalid.getMessage().startsWith("Please add a time"))){
@@ -62,7 +69,7 @@ final class VoiceTaskDialog {
                         try{
                             SpokenTask amended=VoiceLanguages.parse(corrected,ZonedDateTime.now(),language);
                             dialog.dismiss();
-                            review(activity,amended,saved);
+                            review(activity,amended,saved,false,language,cancelled);
                         }catch(IllegalArgumentException wrong){
                             command.setError(wrong.getMessage());
                         }
@@ -97,14 +104,11 @@ final class VoiceTaskDialog {
      * task text, due date, 24-hour clock time, and recurrence. No re-dictation.
      */
     static void reviewImported(Activity activity,SpokenTask parsed,Runnable saved) {
-        review(activity,parsed,saved,true);
+        review(activity,parsed,saved,true,VoiceLanguages.language(activity),()->{});
     }
 
-    private static void review(Activity activity,SpokenTask parsed,Runnable saved){
-        review(activity,parsed,saved,false);
-    }
-
-    private static void review(Activity activity,SpokenTask parsed,Runnable saved,boolean imported){
+    private static void review(Activity activity,SpokenTask parsed,Runnable saved,
+                               boolean imported,String language,Runnable cancelled){
         VoiceReviewModel model=new VoiceReviewModel(parsed,java.time.ZoneId.systemDefault());
         int pad=dp(activity,18);
 
@@ -221,11 +225,12 @@ final class VoiceTaskDialog {
         AlertDialog dialog=new AlertDialog.Builder(activity)
                 .setTitle(imported?"Check your message task":"Check your voice task")
                 .setView(scroll)
-                .setNegativeButton("Cancel",null)
+                .setNegativeButton("Cancel",(d,w)->cancelled.run())
+                .setOnCancelListener(d->cancelled.run())
                 .setNeutralButton(imported?"Edit message":"Edit transcript",
                         (d,w)->{
                             if(imported)MessageTaskDialog.editMessage(activity,parsed.original,saved);
-                            else editCommand(activity,parsed.original,VoiceLanguages.language(activity),saved);
+                            else editCommand(activity,parsed.original,language,saved,cancelled);
                         })
                 .setPositiveButton("Create task",null).create();
         dialog.setOnShowListener(d->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
