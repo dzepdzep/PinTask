@@ -29,7 +29,12 @@ public final class TaskWidget extends AppWidgetProvider {
                 RemoteViews view = new RemoteViews(context.getPackageName(),R.layout.task_widget);
                 view.setTextViewText(R.id.widget_title,"PinTask · " + tasks.size() + " tasks");
                 view.setOnClickPendingIntent(R.id.widget_title, PendingIntent.getActivity(context,0,new Intent(context,ShiftActivity.class).putExtra("open_work",!tasks.isEmpty() && TaskSections.isWork(tasks.get(0))).setData(android.net.Uri.parse("pintask://widget/"+id)).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
-                view.setOnClickPendingIntent(R.id.widget_add, PendingIntent.getActivity(context,0,new Intent(context,QuickAddActivity.class),PendingIntent.FLAG_IMMUTABLE));
+                view.setOnClickPendingIntent(R.id.widget_add,
+                        QuickCaptureWidget.captureIntent(context,id,false));
+                view.setOnClickPendingIntent(R.id.widget_voice,
+                        QuickCaptureWidget.captureIntent(context,id,true));
+                view.setTextViewText(R.id.widget_voice,
+                        "🎤 "+VoiceLanguages.SHORT[VoiceLanguages.selection(context)]);
                 view.removeAllViews(R.id.widget_tasks);
                 if (tasks.isEmpty()) view.setTextViewText(R.id.widget_empty,"All done. Add a task above.");
                 else view.setTextViewText(R.id.widget_empty,tasks.size() > visible ? "Showing "+visible+" · Tap PinTask for all tasks" : "Tap Done to complete a task");
