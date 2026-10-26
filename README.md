@@ -1,3 +1,13 @@
+# PinTask 3.16-rc1 — Home-screen Quick Add + Voice widget
+
+- **New compact home widget:** Long-press the Android home screen → Widgets → PinTask → **Quick Add and Voice**. The compact ~4×1 widget features a **Type a task** area, a microphone button, and an EN/DE/HR chip; tapping the chip cycles the voice language without visiting the main PinTask screen.
+- **Type without opening the main app:** Tap Type to open only a translucent, lightweight entry dialog over the launcher; type and confirm Add to create an immediate pinned unfinished task. Cancel and blank input create nothing.
+- **Speak without opening the main app:** Tap the widget microphone to launch Android's installed speech recognizer using the selected language, then edit the transcription and review the due date/time, advanced warning and repeat. No task is created until **Create task** is tapped. The existing alarm, early reminders and notification architecture is reused unchanged. Android's speech recognition overlay and the temporary confirmation window are technically activities, since Android does not allow an editable text field or active mic capture directly inside an AppWidget RemoteViews. The full PinTask app is never opened.
+- **Existing task-list widget improved:** Its Add row now contains both Type and Voice shortcuts.
+- **Consistency and safety:** Voice review cancellation closes the temporary widget window; speech cancellation creates nothing. No new microphone permission, no remote service, no migration/uninstall, and no changes to the working alarm sound, Done/Snooze, conditional status icon, timer or voice parser rules.
+- **Validation:** New Robolectric tests cover typed and spoken widget flows, user confirmation, canceled voice input, current HR language use, locale cycling and task scheduling.
+- **Install:** Update over the existing package, then add the **PinTask · Quick Add and Voice** widget from Android launcher Widgets. Some launchers may require widget refresh/re-add after upgrading.
+
 # PinTask 3.15-rc1 — Natural English and German spoken task reminders
 
 - English now understands normal spoken delay expressions including **"in an hour"**, "in half an hour", "in two hours", "in thirty minutes", and secondary clauses such as **"Remind me five minutes earlier"** and "notify me at least ten minutes beforehand".
