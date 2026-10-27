@@ -229,7 +229,7 @@ final class VoiceLanguages {
             switch(n){
                 case "jedan":case "jedna":case "jednu":case "jedno":return "1";
                 case "dva":case "dvije":return "2";case "tri":return "3";case "četiri":return "4";
-                case "pet":return "5";case "petnaest":return "15";case "šest":return "6";case "sedam":return "7";
+                case "pet":return "5";case "šest":return "6";case "sedam":return "7";
                 case "osam":return "8";case "devet":return "9";case "deset":return "10";
                 case "jedanaest":return "11";case "dvanaest":return "12";
                 case "trinaest":return "13";case "četrnaest":return "14";case "petnaest":return "15";
