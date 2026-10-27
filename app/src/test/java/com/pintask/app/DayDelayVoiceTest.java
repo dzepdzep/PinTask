@@ -65,6 +65,33 @@ public class DayDelayVoiceTest {
                 "en-US","lock the door",NOW.plusHours(1),5);
     }
 
+    @Test public void germanVoiceDayAndWeekExpressionsWithAdvanceWarnings(){
+        // The voice service may return spoken number words or digits; both
+        // must resolve to the same calendar due date and early-alarm offset.
+        assertDue("Erinnere mich in zwei Tagen daran, den Müll rauszubringen, 15 Minuten vorher",
+                "de-DE","den Müll rauszubringen",NOW.plusDays(2),15);
+        assertDue("Erinnere mich in 2 Tagen daran, den Müll rauszubringen, fünf Minuten früher",
+                "de-DE","den Müll rauszubringen",NOW.plusDays(2),5);
+        assertDue("Erinnere mich in drei Tagen daran, die Blumen zu gießen. Erinnere mich zehn Minuten vorher.",
+                "de-DE","die Blumen zu gießen",NOW.plusDays(3),10);
+        assertDue("Erinnere mich in einer Woche daran, den Brief abzuschicken. Erinnere mich 30 Minuten vorher.",
+                "de-DE","den Brief abzuschicken",NOW.plusWeeks(1),30);
+        assertDue("Erinnere mich in zwei Wochen daran, den Termin zu prüfen. Erinnere mich 15 Minuten vorher.",
+                "de-DE","den Termin zu prüfen",NOW.plusWeeks(2),15);
+        assertDue("Erinnere mich in einem Tag daran, die Tür zu schließen.",
+                "de-DE","die Tür zu schließen",NOW.plusDays(1),0);
+    }
+
+    @Test public void germanVoiceRejectsUnsupportedOrConflictingDates(){
+        for(String spoken:new String[]{
+                "Erinnere mich in 31 Tagen daran, die Rechnung zu zahlen.",
+                "Erinnere mich in fünf Wochen daran, die Rechnung zu zahlen.",
+                "Erinnere mich in zwei Tagen um 14 Uhr daran, Müll rauszubringen.",
+                "Erinnere mich in zwei Tagen daran, Müll rauszubringen. 15 Minuten vorher. 20 Minuten vorher."
+        })assertThrows(spoken,IllegalArgumentException.class,
+                ()->VoiceLanguages.parse(spoken,NOW,"de-DE"));
+    }
+
     @Test public void invalidOrExcessiveCalendarOffsetsDoNotCreateUnexpectedTasks(){
         for(String bad:new String[]{
                 "Remind me to pay rent in 31 days 5 minutes earlier",
