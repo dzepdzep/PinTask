@@ -65,11 +65,11 @@ final class VoiceLanguages {
                     m->"in "+numeral(m.group(1),"de-DE")+" hours");
             s=replace(s,"\\bin\\s+(\\d{1,4}|[\\p{L}ß]+)\\s+minuten?\\b",
                     m->"in "+numeral(m.group(1),"de-DE")+" minutes");
-            s=replace(s,"^(?:bitte\\s+)?(?:erinnere\\s+mich\\s+(?:daran\\s*,?\\s*(?:dass\\s+ich\\s+)?|an\\s+|zu\\s+)?|ich\\s+(?:muss|möchte|will)\\s+|denk\\s+daran\\s*,?\\s*)","");
+            s=replace(s,"^(?:bitte\\s+)?(?:(?:erinnere|erinner)\\s+mich\\s+(?:(?:daran|dran)\\s*,?\\s*(?:dass\\s+ich\\s+)?|an\\s+|zu\\s+)?|ich\\s+(?:muss|möchte|will)\\s+|denk\\s+daran\\s*,?\\s*)","");
             // A second instruction can repeat the assistant invocation:
             // "Erinnere mich fünf Minuten vorher" -> "5 minutes before".
             // Preserve it as an advance warning, never as a second task.
-            s=replace(s,"\\b(?:(?:erinnere|erinner)\\s+mich\\s+(?:bitte\\s+)?(?:nochmal\\s+)?|sag\\s+mir\\s+)?"+
+            s=replace(s,"\\b(?:und\\s+)?(?:(?:erinnere|erinner)\\s+mich\\s+(?:bitte\\s+)?(?:nochmal\\s+)?|sag\\s+mir\\s+)?"+
                     "(?:(?:mindestens|wenigstens|schon|bereits)\\s+)?"+
                     "(\\d{1,4}|[\\p{L}ß]+)\\s+(?:minuten?|mins?)\\s+(?:vorher|früher|davor)\\b",
                     m->numeral(m.group(1),"de-DE")+" minutes before");
@@ -105,7 +105,7 @@ final class VoiceLanguages {
             s=replace(s,"\\bum\\s+(\\d{1,2}|[\\p{L}ß]+)(:\\d{1,2})?\\s*$",m->clock(m,"de-DE"));
             // "daran, den Computer auszuschalten" is a normal German
             // complement; "daran" is not the task and must not enter its title.
-            s=replace(s,"\\bdaran\\s*,?\\s*(?=(?:den|die|das|etwas)\\s+)","");
+            s=replace(s,"\\b(?:daran|dran)\\s*,?\\s*(?=(?:den|die|das|etwas)\\s+)","");
         } else {
             s=replace(s,"^(?:molim\\s+te\\s+)?(?:podsjeti\\s+me\\s+(?:da\\s+)?|podsjeti\\s+me\\s+|moram\\s+|trebam\\s+|treba\\s+mi\\s+)","");
             // Natural Croatian delay constructions: "za sat vremena" and
@@ -143,7 +143,7 @@ final class VoiceLanguages {
             // "podsjeti me bar pet minuta ranije".
             // "bar/barem/najmanje" means a minimum; use that stated minimum
             // and show the editable 5-minute lead in the confirmation.
-            s=replace(s,"\\b(?:(?:podsjeti\\s+me|podsjeti)\\s+)?(?:(?:bar|barem|najmanje)\\s+)?"+
+            s=replace(s,"\\b(?:(?:i|ali)\\s+)?(?:(?:podsjeti\\s+me|podsjeti)\\s+)?(?:(?:bar|barem|najmanje)\\s+)?"+
                     "(\\d{1,4}|[\\p{L}]+)\\s+(?:minuta|minutu|minute)\\s+(?:prije|ranije)\\b",
                     m->numeral(m.group(1),"hr-HR")+" minutes before");
             s=replace(s,"\\b(?:(?:podsjeti\\s+me|podsjeti)\\s+)?(?:(?:bar|barem|najmanje)\\s+)?"+
@@ -180,7 +180,7 @@ final class VoiceLanguages {
                 "(hours?|minutes?)\\b",m->"in "+englishNumeral(m.group(1))+" "+m.group(2));
         // "Remind me ... Remind me five minutes earlier." is one reminder
         // with one due time and one advance offset, NOT two tasks.
-        s=replace(s,"\\b(?:(?:please\\s+)?remind\\s+me\\s+(?:again\\s+)?|"+
+        s=replace(s,"\\b(?:(?:and|but)\\s+)?(?:(?:please\\s+)?remind\\s+me\\s+(?:again\\s+)?|"+
                 "notify\\s+me\\s+)?(?:(?:at\\s+least|at\\s+minimum|just)\\s+)?"+
                 "(\\d{1,4}|one|two|three|four|five|six|seven|eight|nine|ten|"+
                 "fifteen|twenty|thirty|forty|fifty|sixty)\\s+"+
