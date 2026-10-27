@@ -5,7 +5,7 @@
 - German and Croatian now also accept natural calendar-day delays such as `in zwei Tagen` and `za dva dana`, including spoken “fifteen” in Croatian advance warnings.
 - Calendar-day scheduling **preserves the local clock time through daylight saving time transitions**. Delays over 30 days, fractional calendar days, conflicting schedule clauses, and advance warnings already in the past are still rejected.
 - Adds tests for the exact erroneous speech transcript, correctly transcribed forms, German/Croatian expressions, DST, advance-alert timing, unsafe durations and review-before-save. Existing task data, ringtone/audio, Done/Snooze, widget and notification controls are untouched.
-- **Test candidate only** until Android CI and device check; prerelease on GitHub after explicit confirmation.
+- **Normal GitHub release (not prerelease):** Expanded English/German/Croatian parser regression tests passed, and signed APK verification passed in CI. As with all Android builds, actual phone speech transcription and alarm playback should still be tested before relying on time-critical tasks.
 
 # PinTask 3.16-rc1 — Home-screen Quick Add + Voice widget
 
