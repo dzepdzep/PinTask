@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -60,3 +60,23 @@ jobs:
           name: BatteryCare-v0.2.0-signed-apk
           path: BatteryCare/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+      - name: Publish Battery Care as a normal GitHub Release
+        if: github.ref == 'refs/heads/battery-care-build'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="batterycare-v0.2.0"
+          APK="BatteryCare-v0.2.0.apk"
+          cp BatteryCare/app/build/outputs/apk/release/app-release.apk "$APK"
+          sha256sum "$APK" > BatteryCare-v0.2.0-SHA256SUMS.txt
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "The Battery Care release already exists; not overwriting a published APK."
+            gh release view "$TAG" --json url -q .url
+          else
+            gh release create "$TAG" "$APK" BatteryCare-v0.2.0-SHA256SUMS.txt \
+              --target "$GITHUB_SHA" \
+              --title "Battery Care v0.2.0 (Android app)" \
+              --notes "Battery Care is a standalone Android app, not a PinTask update. Includes Start Fresh / Check All, powered-off maintenance schedules, controller profiles, reminders and backup/restore. This is an ordinary signed release built and tested automatically. First-time users should install the APK and test the 60-second alarm with the phone locked. Users of the earlier debug-signed v0.1.0 may need to export data, uninstall the debug APK, install this signed APK, then restore data. The separate app is temporarily hosted in the PinTask repository until a dedicated repository exists." \
+              --latest=false
+          fi
