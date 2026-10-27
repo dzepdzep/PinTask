@@ -75,12 +75,11 @@ jobs:
             echo "::notice::Release $TAG already exists. Bump versionName and versionCode for each new app release."
             exit 0
           fi
-          EXTRA_FLAGS=()
-          if [[ "$RELEASE_VERSION" == *-rc* || "$RELEASE_VERSION" == *-beta* || "$RELEASE_VERSION" == *-alpha* ]]; then
-            EXTRA_FLAGS+=(--prerelease)
-          fi
+          # Publish all future releases as ordinary GitHub Releases.
+          # Always set a new versionName/versionCode before merging to main.
           gh release create "$TAG" "PinTask-${RELEASE_VERSION}.apk" SHA256SUMS \
             --target "$GITHUB_SHA" \
             --title "PinTask ${RELEASE_VERSION}" \
-            --notes "Signed installable APK. Install over your existing PinTask; do not uninstall or local data will be erased. Automated tests and signature verification passed. Includes a compact home-screen Quick Add + Voice widget with EN/DE/HR selection, one-tap voice review, improved natural-language early reminders, stopwatch-style time entry, conditional status indicator, and optional alarm ringtone with Done/Snooze/Stop sound controls. Android and OEM notification behavior can vary; test alarms on your device and keep a backup Clock alarm for important reminders. This is a prerelease candidate." \
-            --generate-notes "${EXTRA_FLAGS[@]}"
+            --notes "Signed installable APK. Install over your existing PinTask; do not uninstall or local data will be erased. Automated tests and APK signature verification passed. Includes compact Quick Add + Voice home widget with EN/DE/HR selection, conversational relative-day and early-warning reminders (including speech-to-text 'into days' correction), stopwatch-style time entry, conditional task icon, and optional alarm ringtone with Done/Snooze/Stop sound controls. Android/OEM speech recognition and alarms still require on-device verification; use a backup Clock alarm for important reminders." \
+            --latest \
+            --generate-notes

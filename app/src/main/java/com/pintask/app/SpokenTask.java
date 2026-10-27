@@ -50,7 +50,7 @@ final class SpokenTask {
     private static final Pattern CLOCK=Pattern.compile(
         "\\bat\\s+(\\d{1,2})(?::(\\d{1,2}))?\\s*(am|pm)?\\b",Pattern.CASE_INSENSITIVE);
     private static final Pattern DELAY=Pattern.compile(
-        "\\bin\\s+(\\d+(?:[.,]\\d+)?)\\s*(hours?|hrs?|h|minutes?|mins?|m)\\b",
+        "\\bin\\s+(\\d+(?:[.,]\\d+)?)\\s*(weeks?|days?|hours?|hrs?|h|minutes?|mins?|m)\\b",
         Pattern.CASE_INSENSITIVE);
     private static final Pattern BEFORE=Pattern.compile(
         "\\b(?:(\\d{1,4}|one|five|ten|fifteen|twenty|thirty|forty|sixty)\\s*(minutes?|mins?|m|hours?|hrs?|h)|half\\s+(?:an?\\s+)?hour)\\s+(?:before(?:hand)?|earlier|early|in\\s+advance)\\b",
@@ -154,9 +154,25 @@ final class SpokenTask {
         Duration duration=null;
         if(delayMatcher.find()){
             double n=Double.parseDouble(delayMatcher.group(1).replace(',','.'));
-            boolean hours=delayMatcher.group(2).startsWith("h");
-            double seconds=n*(hours?3600:60);
-            if(!Double.isFinite(seconds)||seconds<1||seconds>30d*24*3600||seconds!=Math.rint(seconds))
+            String unit=delayMatcher.group(2).toLowerCase(Locale.ROOT);
+            double seconds;
+            if(unit.startsWith("day")||unit.startsWith("week")){
+                // Calendar days/weeks retain the same local wall-clock time through DST,
+                // unlike converting "in two days" to a fixed 48-hour interval.
+                double days=n*(unit.startsWith("week")?7:1);
+                if(!Double.isFinite(days)||days!=Math.rint(days)||days<1||days>30)
+                    throw new IllegalArgumentException("Choose a whole number of days, up to 30.");
+                ZonedDateTime future=at.plusDays((long)days);
+                seconds=Duration.between(at.toInstant(),future.toInstant()).getSeconds();
+            }else{
+                boolean hours=unit.startsWith("h");
+                seconds=n*(hours?3600:60);
+            }
+            // Day-based durations were individually bounded above; DST may make
+            // 30 calendar days an hour longer or shorter than 30*24 hours.
+            if(!Double.isFinite(seconds)||seconds<1||
+                    (unit.startsWith("day")||unit.startsWith("week")?seconds>31d*24*3600:seconds>30d*24*3600)||
+                    seconds!=Math.rint(seconds))
                 throw new IllegalArgumentException("Choose a delay between 1 second and 30 days.");
             duration=Duration.ofSeconds((long)seconds);
             working=remove(working,delayMatcher.start(),delayMatcher.end());
