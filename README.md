@@ -1,3 +1,62 @@
+# PinTask 3.16-rc1 — Home-screen Quick Add + Voice widget
+
+- **New compact home widget:** Long-press the Android home screen → Widgets → PinTask → **Quick Add and Voice**. The compact ~4×1 widget features a **Type a task** area, a microphone button, and an EN/DE/HR chip; tapping the chip cycles the voice language without visiting the main PinTask screen.
+- **Type without opening the main app:** Tap Type to open only a translucent, lightweight entry dialog over the launcher; type and confirm Add to create an immediate pinned unfinished task. Cancel and blank input create nothing.
+- **Speak without opening the main app:** Tap the widget microphone to launch Android's installed speech recognizer using the selected language, then edit the transcription and review the due date/time, advanced warning and repeat. No task is created until **Create task** is tapped. The existing alarm, early reminders and notification architecture is reused unchanged. Android's speech recognition overlay and the temporary confirmation window are technically activities, since Android does not allow an editable text field or active mic capture directly inside an AppWidget RemoteViews. The full PinTask app is never opened.
+- **Existing task-list widget improved:** Its Add row now contains both Type and Voice shortcuts.
+- **Consistency and safety:** Voice review cancellation closes the temporary widget window; speech cancellation creates nothing. No new microphone permission, no remote service, no migration/uninstall, and no changes to the working alarm sound, Done/Snooze, conditional status icon, timer or voice parser rules.
+- **Validation:** New Robolectric tests cover typed and spoken widget flows, user confirmation, canceled voice input, current HR language use, locale cycling and task scheduling.
+- **Install:** Update over the existing package, then add the **PinTask · Quick Add and Voice** widget from Android launcher Widgets. Some launchers may require widget refresh/re-add after upgrading.
+
+# PinTask 3.15-rc1 — Natural English and German spoken task reminders
+
+- English now understands normal spoken delay expressions including **"in an hour"**, "in half an hour", "in two hours", "in thirty minutes", and secondary clauses such as **"Remind me five minutes earlier"** and "notify me at least ten minutes beforehand".
+- German now handles **"in einer Stunde"**, "in einer halben Stunde", number words in relative delays, and independent early warnings such as **"Erinnere mich fünf Minuten vorher"**, "mindestens zehn Minuten vorher". Handles the grammatical filler in **"daran, den Computer auszuschalten"**, preserving the meaningful task name.
+- Both map the main time and separate early warning to **one task with one due time**. E.g. task due in 60 minutes, alarm in 55 minutes. Review still shows the exact originally recognized transcript, lets users correct title/time/early warnings, and requires explicit confirmation.
+- Existing Croatian grammar, English/German past formats, saved SQLite tasks, working alarm sound, Done/Snooze/Stop sound, status-icon condition and time pickers are unchanged.
+- Ambiguous schedules, duplicate advance phrases and warnings in the past are still rejected conservatively. Android speech recognizer is outside the app; correctly transcribed text is required, with editable fallback.
+
+# PinTask 3.14-rc1 — Natural Croatian voice reminders with advance warnings
+
+- Croatian (hr-HR) text can now understand **“podsjeti me za sat vremena da ugasim kompjuter podsjeti me bar pet minuta ranije”**. The task is due in one hour, the alarm is scheduled **five minutes before** that due time, the task title is **“ugasim kompjuter”**, and the entire originally recognized transcript is shown for correction before saving.
+- Adds “za sat vremena”, “za jedan sat”, “za dva sata”, “za pola sata”, optional “vremena”, and normal minimum-lead phrases like “bar/barem/najmanje pet minuta ranije/prije”, including natural second “podsjeti me” clauses.
+- Localized “da” before a task clause is stripped **only** from extracted Croatian task names; English/German titles and the full recognized text remain unchanged.
+- Preserves the conservative parser: ambiguous or contradictory times fail validation, and early alerts that would already be due cannot be saved. No automatic task creation from speech without explicit confirmation.
+- Android's external speech recognition must transcribe the actual words reasonably; if not, the existing editable transcript lets the user correct them. No cloud service added.
+- No changes to working ringtone playback, Done/Snooze stop actions, notification channels, scheduled alarms, custom stopwatch/time pickers, other languages, saved tasks or SQLite schema.
+
+# PinTask 3.13-rc1 — Done / Snooze stops the ringing alarm
+
+- **Confirmed by user:** Opt-in independent alarm ringtone can be heard on their OnePlus/Android 16; however, the alarm continued after Done on the reminder notification.
+- **Done:** Both the normal pinned task notification and the temporary ringing foreground notification's Done action complete the task and immediately stop its associated ringtone, without completing unrelated tasks. The same works from task completion inside the app through the existing shared notification-cancellation path.
+- **Snooze:** Selecting Snooze on either notification silences immediately before showing the 5/15/30-minute, tomorrow, or custom time chooser; confirming a time schedules a new reminder without completing the task.
+- **Stop sound:** The foreground ringing notification also provides an explicit Stop sound control. This silences playback **only**, leaving the task pending until Done or Snooze.
+- **Android compatibility:** The stop request uses `Context.stopService()` instead of trying to start a service in the background, which could be rejected on Android 16. Only the currently ringing task can stop its playback when completed. Foreground service playback limits, notification channels, exact scheduling, voice recognition, custom time pickers and existing task data are unchanged.
+- **Safety:** Includes automated tests for Done, Snooze, unrelated tasks, and stop request. Install as an update, never uninstall to migrate tasks. The behavior still requires actual OnePlus locked-screen verification before calling it fully confirmed.
+
+# PinTask 3.12-rc1 — Task-only status icon, stopwatch immediately, and stable settings scroll
+
+- **Only show the PinTask status icon for real task reminders:** More → Show icon only for active reminders enables an optional task-attention notification. It stays hidden when there are no active timed reminders. It appears when a scheduled task's configured reminder actually fires (including early reminders), remains while that timed task needs attention and clears on Done or Snooze. No unscheduled tasks, paused/silent tasks, distant upcoming tasks or already completed tasks generate a permanent PinTask shortcut.
+- **Do not pre-post silent reminders:** The conditional status icon is added after the reminder callback marks the task as delivered. The original audible reminder notification channel remains unchanged. The user can turn the indicator off; OxygenOS still controls which silent notification icons it shows at the top of the screen.
+- **Stopwatch is the primary control now:** Tasks → When and the editor's Or alert me open hour/minute/second wheels directly, with Type duration for examples like 1h 17m, 1:17:30, 90 seconds; a Quick presets option remains, and the quick task picker has a Now button. No intermediate list hides the stopwatch.
+- **More page keeps its place:** App settings toggles rebuild the page while restoring its previous vertical scrolling position. Switching to a different page still starts at the top.
+- **No changes to old user task data, language recognition, saved advance reminder minutes or alarm scheduler.** This is an opt-in test candidate, not a verified alarm-audio fix; the OnePlus missing-alarm-sound issue still requires device diagnostics.
+
+# PinTask 3.11-rc1 — Independent alarm ringtone and verifiable icon switch
+
+- **Status icon is a real toggle:** More → Show PinTask icon next to the clock (default off). The adjacent **Status icon diagnostics** distinguishes Off, permission/category blocked, not posted, and posted. PinTask cannot force OxygenOS to display silent notification icons if the device's status-bar settings hide them. Refresh and category-settings shortcuts are provided.
+- **Optional alarm ringtone:** More → Also ring with alarm ringtone (default off). On a newly delivered, timely scheduled alarm, PinTask also requests a bounded 30-second foreground audio playback of the system alarm ringtone, independently of the sound chosen for Android notification channels. A Stop ringing action and 30-second auto-stop are provided. Because this is additional to the normal notification, users whose notification sounds already work may hear two sounds. Android DND/power restrictions can still prevent sound. Due alarms recovered very late by the watchdog do not unexpectedly ring.
+- **Diagnostic detail:** More → Reminder health check shows direct-ringtone and icon status; More → Reminder diagnostics records ringtone service request, blocked start, playback started, playback failure or ringtone stopped (the logs cannot prove an audible sound actually reached the user).
+- **Preserves existing behavior:** The stored tasks, voice parsing, import from messages, timer wheels, Quick Add, active task notifications and exact alarm scheduler remain. No data migration or uninstall. No promise of a confirmed hardware fix until a locked-screen alarm rings on the affected OnePlus.
+- **Android FGS:** Only opt-in playback uses `foregroundServiceType=mediaPlayback`. This is an experimental candidate, not a stable release.
+
+# PinTask 3.10-rc1 — Scroll-or-type time and earlier reminder pickers
+
+- **Clock time:** For regular, work, recurring-routine, spoken, or message-imported tasks, users can scroll separate **HOURS** and **MINUTES** wheels or switch to **Type** and enter exact 24-hour `HH:mm` (for example `03:30` or `15:45`). 24:00 and invalid minutes are rejected; Cancel does not change the task.
+- **Advance reminders:** The main task editor retains existing easy presets and guided-tour spinner, and adds **Remind me earlier · Scroll or type**. The two-wheel input allows 0 minutes (at time) up to 24 hours (max stored in database) or typed `75`, `1:15`, `1h 15m`. The chosen amount is persisted with the task, including non-preset minutes such as 77.
+- **Voice / imported-message review:** Its date/time/advance fields now use the same flexible picker, preserving editability and confirmation. No changes to voice-language parsing or message import.
+- **No database migration or deletion:** Existing tasks, saved early reminders and other 3.9 features remain intact. The earlier OnePlus alarm-sound failure is **not fixed** by these UI changes; the release is a candidate pending real-device checks.
+
 # PinTask 3.9-rc1 — Message-to-task import and status bar icon
 
 - **Share or paste text as a task:** In Android, select text or share a message to PinTask, or open Tasks → **Paste message → task**. PinTask only reads text that you explicitly share or paste, and parses dates/times offline; no SMS, messaging, notification-listener or microphone permissions are added.

@@ -82,5 +82,5 @@ jobs:
           gh release create "$TAG" "PinTask-${RELEASE_VERSION}.apk" SHA256SUMS \
             --target "$GITHUB_SHA" \
             --title "PinTask ${RELEASE_VERSION}" \
-            --notes "Signed installable APK. Install over your existing PinTask; do not uninstall or local data will be erased. Automated tests and signature verification passed. IMPORTANT: This is an experimental alarm-sound release candidate. On a OnePlus/Android 16 device an alarm callback and notification post occurred on time without an audible ringtone; that failure remains unresolved. The three confirmed speech locales are English, German and Croatian. Keep a backup Clock alarm for important reminders." \
+            --notes "Signed installable APK. Install over your existing PinTask; do not uninstall or local data will be erased. Automated tests and signature verification passed. Includes a compact home-screen Quick Add + Voice widget with EN/DE/HR selection, one-tap voice review, improved natural-language early reminders, stopwatch-style time entry, conditional status indicator, and optional alarm ringtone with Done/Snooze/Stop sound controls. Android and OEM notification behavior can vary; test alarms on your device and keep a backup Clock alarm for important reminders. This is a prerelease candidate." \
             --generate-notes "${EXTRA_FLAGS[@]}"

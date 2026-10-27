@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/capture_surface"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:minHeight="78dp" android:padding="10dp"
+    android:orientation="vertical" android:background="@drawable/quick_capture_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="0dp" android:layout_height="25dp" android:layout_weight="1"
+            android:text="PinTask" android:textSize="15sp" android:textStyle="bold"
+            android:textColor="#A6E9CD" android:gravity="center_vertical" />
+        <TextView android:id="@+id/capture_language" android:layout_width="43dp"
+            android:layout_height="30dp" android:gravity="center" android:text="EN"
+            android:textColor="#FFFFFF" android:textSize="12sp" android:textStyle="bold"
+            android:background="@drawable/quick_capture_chip"
+            android:contentDescription="Change voice language" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/capture_type" android:layout_width="0dp" android:layout_height="47dp"
+            android:layout_weight="1" android:gravity="center_vertical"
+            android:paddingStart="12dp" android:paddingEnd="6dp"
+            android:background="@drawable/quick_capture_input"
+            android:text="+  Type a task…" android:textColor="#E9F1FA"
+            android:textSize="14sp" android:contentDescription="Quick add a task by typing" />
+        <TextView android:id="@+id/capture_voice" android:layout_width="56dp"
+            android:layout_height="47dp" android:layout_marginStart="8dp"
+            android:gravity="center" android:background="@drawable/quick_capture_input"
+            android:text="🎤" android:textSize="24sp" android:textColor="#FFFFFF"
+            android:contentDescription="Quick add a task by voice" />
+    </LinearLayout>
+</LinearLayout>
