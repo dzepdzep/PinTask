@@ -53,6 +53,13 @@ final class VoiceLanguages {
         if("de-DE".equals(tag)){
             // Convert natural German relative times BEFORE generic noun conversion
             // (Stunde -> hour) so "in einer Stunde" is not left unparsed.
+            // Natural calendar-day expressions use local calendar days.
+            s=replace(s,"\\bin\\s+einem\\s+tag\\b","in 1 day");
+            s=replace(s,"\\bin\\s+einer\\s+woche\\b","in 1 week");
+            s=replace(s,"\\bin\\s+(\\d{1,2}|[\\p{L}ß]+)\\s+tagen?\\b",
+                    m->"in "+numeral(m.group(1),"de-DE")+" days");
+            s=replace(s,"\\bin\\s+(\\d{1,2}|[\\p{L}ß]+)\\s+wochen?\\b",
+                    m->"in "+numeral(m.group(1),"de-DE")+" weeks");
             s=replace(s,"\\bin\\s+(?:eine[rnm]?\\s+)?halbe[nr]?\\s+stunde\\b","in 30 minutes");
             s=replace(s,"\\bin\\s+(\\d{1,3}|[\\p{L}ß]+)\\s+stunden?\\b",
                     m->"in "+numeral(m.group(1),"de-DE")+" hours");
@@ -103,6 +110,12 @@ final class VoiceLanguages {
             s=replace(s,"^(?:molim\\s+te\\s+)?(?:podsjeti\\s+me\\s+(?:da\\s+)?|podsjeti\\s+me\\s+|moram\\s+|trebam\\s+|treba\\s+mi\\s+)","");
             // Natural Croatian delay constructions: "za sat vremena" and
             // "za pola sata" are task due times, not an early-warning amount.
+            // "za dva dana" and "za jedan dan" are relative task times.
+            s=replace(s,"\\bza\\s+(?:jedan\\s+)?dan\\b","in 1 day");
+            s=replace(s,"\\bza\\s+(\\d{1,2}|[\\p{L}]+)\\s+dana\\b",
+                    m->"in "+numeral(m.group(1),"hr-HR")+" days");
+            s=replace(s,"\\bza\\s+(\\d{1,2}|[\\p{L}]+)\\s+tjed(?:an|na)\\b",
+                    m->"in "+numeral(m.group(1),"hr-HR")+" weeks");
             s=replace(s,"\\bza\\s+pola\\s+sata(?:\\s+vremena)?\\b","in 30 minutes");
             s=replace(s,"\\bza\\s+(?:sat|jedan\\s+sat|jednog\\s+sata)(?:\\s+vremena)?\\b","in 1 hour");
             s=replace(s,"\\bpola\\s+sata\\s+(?:prije|ranije)\\b","half an hour before");
@@ -149,6 +162,15 @@ final class VoiceLanguages {
 
     private static String normalizeEnglish(String input) {
         String s=input.trim().replaceAll("\\s+"," ");
+        // A speech recognizer often hears "in two days" as "into days".
+        // Repair only this exact homophone as a schedule expression; never
+        // rewrite arbitrary task text or guess an unspecified number.
+        s=replace(s,"\\binto\\s+days\\b","in 2 days");
+        s=replace(s,"\\bin\\s+(?:a|one)\\s+day\\b","in 1 day");
+        s=replace(s,"\\bin\\s+(?:a|one)\\s+week\\b","in 1 week");
+        s=replace(s,"\\bin\\s+(\\d{1,3}|one|two|three|four|five|six|seven|eight|nine|ten|"+
+                "fifteen|twenty|thirty)\\s+(days?|weeks?)\\b",
+                m->"in "+englishNumeral(m.group(1))+" "+m.group(2));
         // The legacy core parser takes an unambiguous numeric delay. Convert
         // commonly spoken English numerals, never remove arbitrary task words.
         s=replace(s,"\\bin\\s+(?:half\\s+an?\\s+hour|an?\\s+half\\s+hour)\\b","in 30 minutes");
