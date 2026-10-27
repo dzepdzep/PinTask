@@ -1,4 +1,4 @@
-# PinTask 3.17-rc1 — Natural “in two days” voice reminders, including speech-to-text mishearing
+# PinTask 3.17 — Natural “in two days” voice reminders, including speech-to-text mishearing
 
 - **Fixes exact user report:** `take the trash out into days remind me 15 minutes earlier` (Android heard “into days” instead of “in two days”) is interpreted conservatively as **one task “take the trash out,” due in two calendar days, with an alarm 15 minutes earlier**.
 - Voice accepts `in two days`, `in 2 days`, `in a day`, `in one week` and `in 4 weeks`. The narrow homophone fix only handles the exact `into days` phrase; it does not guess numbers for arbitrary unclear speech.
