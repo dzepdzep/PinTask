@@ -35,6 +35,7 @@ public final class ShiftActivity extends Activity {
     // 7 = custom minutes; legacy preset positions 0..6 are preserved for guides.
     private int customAdvanceMinutes=15;
     private int quickDelaySeconds=0, editorDelaySeconds=-1;
+    private long quickDueAtMillis=0; // 0 = Now or countdown; >0 = exact calendar date/time
     private boolean moreOptions,workEditor,copyingDay;
     private long planTemplateId=0; // 0 = not selected; -1 = Off; positive = saved custom type
     private final List<LocalDate> planDates=new ArrayList<>();
@@ -45,7 +46,7 @@ public final class ShiftActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);tour=new ShiftGuide(this);startupAccess=new StartupAccess(this);
-        if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);quickDelaySeconds=state.getInt("quickDelaySeconds",0);editorDelaySeconds=state.getInt("editorDelaySeconds",-1);reminder=state.getInt("reminder");customAdvanceMinutes=state.getInt("customAdvanceMinutes",15);repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
+        if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);quickDelaySeconds=state.getInt("quickDelaySeconds",0);quickDueAtMillis=state.getLong("quickDueAtMillis",0);editorDelaySeconds=state.getInt("editorDelaySeconds",-1);reminder=state.getInt("reminder");customAdvanceMinutes=state.getInt("customAdvanceMinutes",15);repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
         if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",0);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
         if(state!=null)tour.restore(state.getBoolean("interactiveTour",false),state.getInt("tourStage",0));
         if(state==null)routeIntent(getIntent());render();
@@ -125,7 +126,7 @@ public final class ShiftActivity extends Activity {
             render();
         });
     }
-    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("quickDelaySeconds",quickDelaySeconds);state.putInt("editorDelaySeconds",editorDelaySeconds);state.putInt("reminder",reminder);state.putInt("customAdvanceMinutes",customAdvanceMinutes);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
+    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("quickDelaySeconds",quickDelaySeconds);state.putLong("quickDueAtMillis",quickDueAtMillis);state.putInt("editorDelaySeconds",editorDelaySeconds);state.putInt("reminder",reminder);state.putInt("customAdvanceMinutes",customAdvanceMinutes);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
         state.putBoolean("interactiveTour",tour!=null&&tour.active());
         state.putInt("tourStage",tour==null?0:tour.stage());
         super.onSaveInstanceState(state);}
@@ -169,9 +170,11 @@ public final class ShiftActivity extends Activity {
         microphone.setOnClickListener(v->chooseVoiceLanguage());
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
-        action("When: "+RelativeDelay.labelSeconds(quickDelaySeconds)+"  ▾",()->
+        action("When: "+quickWhenLabel()+"  ▾",()->
                 StopwatchDelayPicker.show(this,quickDelaySeconds,true,selected->{
-                    quickDelaySeconds=selected;remember();render();
+                    remember();quickDelaySeconds=selected;quickDueAtMillis=0;render();
+                },millis->{
+                    remember();quickDueAtMillis=millis;quickDelaySeconds=0;render();
                 }));
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
@@ -244,14 +247,26 @@ public final class ShiftActivity extends Activity {
         VoiceTaskDialog.editCommand(this,candidates.get(0),VoiceLanguages.language(this),()->{quickDraft="";render();});
     }
 
+    private String quickWhenLabel(){
+        if(quickDueAtMillis<=0)return RelativeDelay.labelSeconds(quickDelaySeconds);
+        return java.time.Instant.ofEpochMilli(quickDueAtMillis)
+                .atZone(java.time.ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("EEE d MMM, HH:mm"));
+    }
+
     private void quickAdd(){
         String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
+        if(quickDueAtMillis>0 && quickDueAtMillis<=System.currentTimeMillis()){
+            toast("That date/time has passed. Please choose a future time.");
+            return;
+        }
+        boolean delayed=quickDelaySeconds>0||quickDueAtMillis>0;
         TaskStore.Task task;
-        if(quickDelaySeconds==0) {
+        if(!delayed) {
             try(TaskStore store=new TaskStore(this)){task=TaskSections.addPersonal(store,title);}
             TaskNotifications.show(this,task);
         } else {
-            long target=System.currentTimeMillis()+quickDelaySeconds*1000L;
+            long target=quickDueAtMillis>0?quickDueAtMillis:System.currentTimeMillis()+quickDelaySeconds*1000L;
             try(TaskStore store=new TaskStore(this)){
                 android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
                 try{
@@ -266,11 +281,11 @@ public final class ShiftActivity extends Activity {
             if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=android.content.pm.PackageManager.PERMISSION_GRANTED)
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},44);
             else toast("Enable PinTask notifications in Android settings to show new tasks.");
-        }else if(quickDelaySeconds==0 && !TaskNotifications.canNotifyChannel(this,TaskNotifications.CHANNEL)){
+        }else if(!delayed && !TaskNotifications.canNotifyChannel(this,TaskNotifications.CHANNEL)){
             toast("Enable the Unfinished tasks notification category in Android settings.");
         }
-        boolean delayed=quickDelaySeconds>0;
         quickDelaySeconds=0;
+        quickDueAtMillis=0;
         TaskWidget.refreshAll(this);quickDraft="";hideKeyboard();render();
         if(delayed)ReminderHealth.warnWhenBlocked(this);
     }
@@ -355,7 +370,7 @@ public final class ShiftActivity extends Activity {
         alarmSoundToggle();
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.18",12);
+        text("PinTask 3.19",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}
