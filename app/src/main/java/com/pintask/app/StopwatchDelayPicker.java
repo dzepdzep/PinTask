@@ -17,6 +17,7 @@ import android.widget.NumberPicker;
 import android.widget.TextView;
 import java.util.Locale;
 import java.util.function.IntConsumer;
+import java.util.function.LongConsumer;
 
 /**
  * Stopwatch-style HH:MM:SS delay wheels. These select a duration, never a clock
@@ -110,6 +111,13 @@ final class StopwatchDelayPicker {
     }
 
     static void show(Activity activity,int selectedSeconds,boolean allowNow,IntConsumer saveSeconds) {
+        show(activity,selectedSeconds,allowNow,saveSeconds,null);
+    }
+
+    /** Calendar actions are available to quick personal tasks, not shift
+     * relative-delay pickers. Only one callback is fired for each selection. */
+    static void show(Activity activity,int selectedSeconds,boolean allowNow,
+                     IntConsumer saveSeconds,LongConsumer saveAtMillis) {
         int initial=selectedSeconds>0?Math.min(selectedSeconds,MAX_SECONDS):15*60;
         int[] h={initial/3600},m={(initial%3600)/60},s={initial%60};
         NumberPicker[] pickers=new NumberPicker[3];
@@ -117,7 +125,8 @@ final class StopwatchDelayPicker {
         LinearLayout content=new LinearLayout(activity);
         content.setPadding(dp(activity,14),dp(activity,12),dp(activity,14),dp(activity,4));
         content.setOrientation(LinearLayout.VERTICAL);
-        TextView guidance=label(activity,"Scroll the wheels to choose a duration",14);
+        TextView guidance=label(activity,saveAtMillis==null?"Scroll the wheels to choose a duration":
+                "Countdown, tomorrow, or an exact calendar time",14);
         guidance.setPadding(0,0,0,dp(activity,8));
         content.addView(guidance);
 
@@ -163,7 +172,7 @@ final class StopwatchDelayPicker {
         typed.setVisibility(View.GONE);
         content.addView(typed);
         android.widget.Button presets=new android.widget.Button(activity);
-        presets.setText("Quick presets: 5, 10, 15, 30 or 60 min");
+        presets.setText(saveAtMillis==null?"Quick presets: 5, 10, 15, 30 or 60 min":"Presets");
         presets.setAllCaps(false);
         presets.setContentDescription("Quick delay presets");
         presets.setOnClickListener(v->new AlertDialog.Builder(activity)
@@ -176,7 +185,37 @@ final class StopwatchDelayPicker {
                             pickers[2].setValue(0);
                             method.check(wheelsMode.getId());
                         }).setNegativeButton("Cancel",null).show());
-        content.addView(presets);
+
+        if(saveAtMillis==null){
+            content.addView(presets);
+        }else{
+            // Keep this in the original presets slot: the stopwatch dialog
+            // already occupies most of a phone screen.
+            LinearLayout choices=new LinearLayout(activity);
+            choices.setOrientation(LinearLayout.HORIZONTAL);
+            choices.addView(presets,new LinearLayout.LayoutParams(0,dp(activity,48),1));
+            AlertDialog[] parent={null};
+            android.widget.Button tomorrow=new android.widget.Button(activity);
+            tomorrow.setText("Tomorrow");
+            tomorrow.setTextSize(12);tomorrow.setAllCaps(false);
+            tomorrow.setContentDescription("Choose tomorrow and time");
+            tomorrow.setOnClickListener(v->QuickDateTimePicker.tomorrow(activity,value->{
+                if(parent[0]!=null)parent[0].dismiss();
+                saveAtMillis.accept(value);
+            }));
+            choices.addView(tomorrow,new LinearLayout.LayoutParams(0,dp(activity,48),1));
+            android.widget.Button calendar=new android.widget.Button(activity);
+            calendar.setText("Pick date");
+            calendar.setTextSize(12);calendar.setAllCaps(false);
+            calendar.setContentDescription("Choose calendar date and time");
+            calendar.setOnClickListener(v->QuickDateTimePicker.dateTime(activity,value->{
+                if(parent[0]!=null)parent[0].dismiss();
+                saveAtMillis.accept(value);
+            }));
+            choices.addView(calendar,new LinearLayout.LayoutParams(0,dp(activity,48),1));
+            content.setTag(parent);
+            content.addView(choices);
+        }
         method.setOnCheckedChangeListener((group,id)->{
             boolean type=id==typeMode.getId();
             wheels.setVisibility(type?View.GONE:View.VISIBLE);
@@ -204,16 +243,20 @@ final class StopwatchDelayPicker {
             }
             @Override public void afterTextChanged(android.text.Editable value){}
         });
-        TextView hint=label(activity,"The countdown starts when you save the task.",12);
+        TextView hint=label(activity,saveAtMillis==null?
+                "The countdown starts when you save the task.":
+                "Countdown starts on save · Calendar uses the selected time.",12);
         content.addView(hint);
 
         AlertDialog.Builder builder=new AlertDialog.Builder(activity)
-                .setTitle("Choose alert delay · Stopwatch")
+                .setTitle(saveAtMillis==null?"Choose alert delay · Stopwatch":
+                        "When should this task alert?")
                 .setView(content)
                 .setNegativeButton("Cancel",null)
                 .setPositiveButton("Set delay",null);
         if(allowNow)builder.setNeutralButton("Now",(d,w)->saveSeconds.accept(0));
         AlertDialog dialog=builder.create();
+        if(saveAtMillis!=null)((AlertDialog[])content.getTag())[0]=dialog;
         for(NumberPicker picker:pickers){
             picker.setOnValueChangedListener((view,oldValue,newValue)->{
                 int total=pickers[0].getValue()*3600+pickers[1].getValue()*60+pickers[2].getValue();
