@@ -76,7 +76,10 @@ public class QuickCalendarTaskTest {
             DatePickerDialog picker=(DatePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             LocalDate date=LocalDate.now().plusDays(8);
             picker.getDatePicker().updateDate(date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());
-            picker.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            // Robolectric's DatePickerDialog button can finish without sending
+            // OnDateSet; exercise the actual listener deterministically.
+            picker.onClick(picker,AlertDialog.BUTTON_POSITIVE);
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             TimePickerDialog time=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             time.updateTime(16,45);
             time.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
