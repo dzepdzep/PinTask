@@ -6,7 +6,7 @@ A small Android task and shift planner that keeps unfinished tasks visible and r
 
 ## What it does
 
-- **Tasks:** quick add with **Now, stopwatch countdown, Tomorrow, or Pick date & time**, plus priorities, checklists, notes, search, favorites, repeating tasks, Done, Undo and Snooze.
+- **Tasks:** simple Quick Add **Now / In… / Tomorrow / Pick date & time**, optional **Remind me 5–60 minutes earlier or custom**, and a preview of **Task due** and **Alarm rings** before saving. Also priorities, checklists, notes, search, favorites, repeats, Done, Undo and Snooze.
 - **Reminders:** exact alarms where Android permits, optional alarm ringtone, early alerts, and a status icon that appears when a timed task needs attention.
 - **Voice (English / Deutsch / Hrvatski):** say a task naturally, then **review and correct** the task, date, time and early warning before saving.
 - **Home-screen widgets:** a compact Quick Add + Voice widget and a task list with Done. The mic and text shortcuts open a small popup, not the full app.
