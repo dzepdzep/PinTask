@@ -119,8 +119,8 @@ public class RelativeDelayTest {
             assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay hours"));
             assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay minutes"));
             assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay seconds"));
-            assertNull("Now is chosen in the simple parent menu",
-                    stopwatch.getButton(AlertDialog.BUTTON_NEUTRAL));
+            assertNotNull("The stopwatch still offers an exact duration",
+                    stopwatch.getButton(AlertDialog.BUTTON_POSITIVE));
         }
     }
 
