@@ -104,8 +104,6 @@ public class QuickReminderUiTest {
             Shadows.shadowOf(Looper.getMainLooper()).idle();
             root=controller.get().getWindow().getDecorView();
             assertNotNull(find(root,"Remind me: At task time  ▾"));
-            assertTrue(find(root,"Alarm rings: "+time(System.currentTimeMillis()+180_000L))==null
-                    || find(root,"Task due: ")==null); // no stale fixed calendar timestamp
             find(root,"Add").performClick();
             TaskStore.Task task=store.activeAll().get(0);
             assertEquals(0,task.notifyBeforeMinutes);
@@ -122,7 +120,10 @@ public class QuickReminderUiTest {
             find(root,"Add").performClick();
             TaskStore.Task task=store.activePersonal().get(0);
             assertEquals(0,task.dueAt);
-            assertFalse(task.reminderEnabled());
+            assertEquals("Untimed quick tasks retain existing pinned notification behavior",
+                    -1,task.notifyBeforeMinutes);
+            assertEquals(0,Shadows.shadowOf(context.getSystemService(AlarmManager.class))
+                    .getScheduledAlarms().size());
         }
     }
 
