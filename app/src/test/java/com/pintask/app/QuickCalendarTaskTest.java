@@ -37,10 +37,7 @@ public class QuickCalendarTaskTest {
             firstEntry(root).setText("Put bins outside tomorrow");
             findText(root,"When: Now  ▾").performClick();
             AlertDialog chooser=ShadowAlertDialog.getLatestAlertDialog();
-            assertNotNull(findDescription(chooser.getWindow().getDecorView(),
-                    "Choose tomorrow and time"));
-            findDescription(chooser.getWindow().getDecorView(),
-                    "Choose tomorrow and time").performClick();
+            chooser.getListView().performItemClick(null,2,2); // Tomorrow
             TimePickerDialog time=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             time.updateTime(11,25);
             time.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
@@ -71,8 +68,7 @@ public class QuickCalendarTaskTest {
             firstEntry(root).setText("Doctor's appointment");
             findText(root,"When: Now  ▾").performClick();
             AlertDialog chooser=ShadowAlertDialog.getLatestAlertDialog();
-            findDescription(chooser.getWindow().getDecorView(),
-                    "Choose calendar date and time").performClick();
+            chooser.getListView().performItemClick(null,3,3); // Pick date & time
             DatePickerDialog picker=(DatePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             LocalDate date=LocalDate.now().plusDays(8);
             picker.getDatePicker().updateDate(date.getYear(),date.getMonthValue()-1,date.getDayOfMonth());
@@ -98,8 +94,7 @@ public class QuickCalendarTaskTest {
         try(var activity=Robolectric.buildActivity(ShiftActivity.class).setup()){
             View root=activity.get().getWindow().getDecorView();
             findText(root,"When: Now  ▾").performClick();
-            findDescription(ShadowAlertDialog.getLatestAlertDialog().getWindow().getDecorView(),
-                    "Choose tomorrow and time").performClick();
+            ShadowAlertDialog.getLatestAlertDialog().getListView().performItemClick(null,2,2);
             TimePickerDialog time=(TimePickerDialog)ShadowAlertDialog.getLatestAlertDialog();
             time.updateTime(9,0);
             time.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
@@ -109,6 +104,8 @@ public class QuickCalendarTaskTest {
                     .format(DateTimeFormatter.ofPattern("EEE d MMM, HH:mm"));
             findText(root,"When: "+tomorrow+"  ▾").performClick();
             AlertDialog chooser=ShadowAlertDialog.getLatestAlertDialog();
+            chooser.getListView().performItemClick(null,1,1); // In stopwatch
+            chooser=ShadowAlertDialog.getLatestAlertDialog();
             android.widget.NumberPicker minutes=(android.widget.NumberPicker)findDescription(
                     chooser.getWindow().getDecorView(),"Delay minutes");
             minutes.setValue(10);
@@ -117,7 +114,7 @@ public class QuickCalendarTaskTest {
             root=activity.get().getWindow().getDecorView();
             findText(root,"When: In 10 minutes  ▾").performClick();
             chooser=ShadowAlertDialog.getLatestAlertDialog();
-            chooser.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();
+            chooser.getListView().performItemClick(null,0,0); // Now
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             root=activity.get().getWindow().getDecorView();
             assertNotNull(findText(root,"When: Now  ▾"));

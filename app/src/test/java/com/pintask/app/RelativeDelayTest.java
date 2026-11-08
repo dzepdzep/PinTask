@@ -66,6 +66,8 @@ public class RelativeDelayTest {
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
             View root=controller.get().getWindow().getDecorView();
             find(root,"When: Now  ▾").performClick();
+            AlertDialog mode=ShadowAlertDialog.getLatestAlertDialog();
+            mode.getListView().performItemClick(null,1,1); // In… stopwatch
             AlertDialog stopwatch=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(stopwatch);
             NumberPicker hour=findWheel(stopwatch.getWindow().getDecorView(),"Delay hours");
@@ -108,20 +110,25 @@ public class RelativeDelayTest {
         }
     }
 
-    @Test public void quickStopwatchShowsWheelsAndNowButtonDirectly() {
+    @Test public void quickWhenMenuHasNowAndOpensCountdownWheels() {
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
             find(controller.get().getWindow().getDecorView(),"When: Now  ▾").performClick();
+            AlertDialog mode=ShadowAlertDialog.getLatestAlertDialog();
+            mode.getListView().performItemClick(null,1,1); // In… stopwatch
             AlertDialog stopwatch=ShadowAlertDialog.getLatestAlertDialog();
             assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay hours"));
             assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay minutes"));
             assertNotNull(findWheel(stopwatch.getWindow().getDecorView(),"Delay seconds"));
-            assertNotNull(stopwatch.getButton(AlertDialog.BUTTON_NEUTRAL));
+            assertNotNull("The stopwatch still offers an exact duration",
+                    stopwatch.getButton(AlertDialog.BUTTON_POSITIVE));
         }
     }
 
     @Test public void typedStopwatchValueIsSavedAfterUserConfirms() {
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
             find(controller.get().getWindow().getDecorView(),"When: Now  ▾").performClick();
+            AlertDialog mode=ShadowAlertDialog.getLatestAlertDialog();
+            mode.getListView().performItemClick(null,1,1);
             AlertDialog dialog=ShadowAlertDialog.getLatestAlertDialog();
             android.widget.RadioButton typed=(android.widget.RadioButton)findDescription(
                     dialog.getWindow().getDecorView(),"Type stopwatch mode");
@@ -176,6 +183,8 @@ public class RelativeDelayTest {
         try(var controller=Robolectric.buildActivity(ShiftActivity.class).setup()){
             View root=controller.get().getWindow().getDecorView();
             find(root,"When: Now  ▾").performClick();
+            AlertDialog mode=ShadowAlertDialog.getLatestAlertDialog();
+            mode.getListView().performItemClick(null,1,1);
             AlertDialog select=ShadowAlertDialog.getLatestAlertDialog();
             NumberPicker minutes=findWheel(select.getWindow().getDecorView(),"Delay minutes");
             assertNotNull(minutes);

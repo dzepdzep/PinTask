@@ -36,6 +36,7 @@ public final class ShiftActivity extends Activity {
     private int customAdvanceMinutes=15;
     private int quickDelaySeconds=0, editorDelaySeconds=-1;
     private long quickDueAtMillis=0; // 0 = Now or countdown; >0 = exact calendar date/time
+    private int quickAdvanceMinutes=0; // 0 = alert at task time; >0 = minutes before due
     private boolean moreOptions,workEditor,copyingDay;
     private long planTemplateId=0; // 0 = not selected; -1 = Off; positive = saved custom type
     private final List<LocalDate> planDates=new ArrayList<>();
@@ -46,7 +47,7 @@ public final class ShiftActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);if(Build.VERSION.SDK_INT>=30)getWindow().setDecorFitsSystemWindows(false);repository=new ShiftRepository(this);tour=new ShiftGuide(this);startupAccess=new StartupAccess(this);
-        if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);quickDelaySeconds=state.getInt("quickDelaySeconds",0);quickDueAtMillis=state.getLong("quickDueAtMillis",0);editorDelaySeconds=state.getInt("editorDelaySeconds",-1);reminder=state.getInt("reminder");customAdvanceMinutes=state.getInt("customAdvanceMinutes",15);repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
+        if(state!=null){screen=state.getInt("screen");subpage=state.getInt("subpage");date=LocalDate.parse(state.getString("date"));editorDate=LocalDate.parse(state.getString("editorDate",LocalDate.now().toString()));taskRun=state.getLong("run");detailRun=state.getLong("detailRun");draft=state.getString("draft","");quickDraft=state.getString("quickDraft","");editorGroup=state.getString("editorGroup","");minute=state.getInt("minute",-1);quickDelaySeconds=state.getInt("quickDelaySeconds",0);quickDueAtMillis=state.getLong("quickDueAtMillis",0);quickAdvanceMinutes=state.getInt("quickAdvanceMinutes",0);editorDelaySeconds=state.getInt("editorDelaySeconds",-1);reminder=state.getInt("reminder");customAdvanceMinutes=state.getInt("customAdvanceMinutes",15);repeat=state.getInt("repeat");moreOptions=state.getBoolean("moreOptions");workEditor=state.getBoolean("workEditor");}
         if(state!=null){copyingDay=state.getBoolean("copyingDay");planTemplateId=state.getLong("planTemplateId",0);ArrayList<String> saved=state.getStringArrayList("planDates");if(saved!=null)for(String d:saved)planDates.add(LocalDate.parse(d));}
         if(state!=null)tour.restore(state.getBoolean("interactiveTour",false),state.getInt("tourStage",0));
         if(state==null)routeIntent(getIntent());render();
@@ -126,7 +127,7 @@ public final class ShiftActivity extends Activity {
             render();
         });
     }
-    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("quickDelaySeconds",quickDelaySeconds);state.putLong("quickDueAtMillis",quickDueAtMillis);state.putInt("editorDelaySeconds",editorDelaySeconds);state.putInt("reminder",reminder);state.putInt("customAdvanceMinutes",customAdvanceMinutes);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
+    @Override protected void onSaveInstanceState(Bundle state){remember();state.putBoolean("copyingDay",copyingDay);state.putLong("planTemplateId",planTemplateId);ArrayList<String> savedDates=new ArrayList<>();for(LocalDate d:planDates)savedDates.add(d.toString());state.putStringArrayList("planDates",savedDates);state.putInt("screen",screen);state.putInt("subpage",subpage);state.putString("date",date.toString());state.putString("editorDate",editorDate.toString());state.putLong("run",taskRun);state.putLong("detailRun",detailRun);state.putString("draft",draft);state.putString("quickDraft",quickDraft);state.putString("editorGroup",editorGroup);state.putInt("minute",minute);state.putInt("quickDelaySeconds",quickDelaySeconds);state.putLong("quickDueAtMillis",quickDueAtMillis);state.putInt("quickAdvanceMinutes",quickAdvanceMinutes);state.putInt("editorDelaySeconds",editorDelaySeconds);state.putInt("reminder",reminder);state.putInt("customAdvanceMinutes",customAdvanceMinutes);state.putInt("repeat",repeat);state.putBoolean("moreOptions",moreOptions);state.putBoolean("workEditor",workEditor);
         state.putBoolean("interactiveTour",tour!=null&&tour.active());
         state.putInt("tourStage",tour==null?0:tour.stage());
         super.onSaveInstanceState(state);}
@@ -170,12 +171,19 @@ public final class ShiftActivity extends Activity {
         microphone.setOnClickListener(v->chooseVoiceLanguage());
         Button add=button("Add",true);row.addView(add,new LinearLayout.LayoutParams(dp(70),dp(48)));add.setOnClickListener(v->quickAdd());
         quickEntry.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);quickEntry.setOnEditorActionListener((v,action,event)->{if(action==android.view.inputmethod.EditorInfo.IME_ACTION_DONE){quickAdd();return true;}return false;});
-        action("When: "+quickWhenLabel()+"  ▾",()->
-                StopwatchDelayPicker.show(this,quickDelaySeconds,true,selected->{
-                    remember();quickDelaySeconds=selected;quickDueAtMillis=0;render();
-                },millis->{
-                    remember();quickDueAtMillis=millis;quickDelaySeconds=0;render();
-                }));
+        action("When: "+quickWhenLabel()+"  ▾",this::chooseQuickWhen);
+        if(quickDelaySeconds>0||quickDueAtMillis>0) {
+            action("Remind me: "+quickAdvanceLabel()+"  ▾",this::chooseQuickAdvance);
+            long now=System.currentTimeMillis();
+            long due=QuickTaskTiming.dueAt(quickDelaySeconds,quickDueAtMillis,now);
+            text("Task due: "+quickFormat(due),13);
+            if(QuickTaskTiming.alertAt(due,quickAdvanceMinutes)<=now)
+                text("⚠ Early reminder would be in the past — choose another time.",13);
+            else
+                text("Alarm rings: "+quickFormat(QuickTaskTiming.alertAt(due,quickAdvanceMinutes)),14);
+        }else{
+            text("Add now · No timed alarm",13);
+        }
         action("Regular task · Daily / hourly  ▾",()->{remember();RoutineDialog.show(this,quickDraft,()->{quickDraft="";hideKeyboard();render();});});
         link("Add with time or repeat",()->{remember();if(!quickDraft.isEmpty()){draft=quickDraft;quickDraft="";quickEntry.setText("");}openEditor(false,0);});
         link("Paste message → task",this::pasteMessageTask);
@@ -254,23 +262,84 @@ public final class ShiftActivity extends Activity {
                 .format(DateTimeFormatter.ofPattern("EEE d MMM, HH:mm"));
     }
 
+    /** Keep four simple choices at the top level; the stopwatch opens only
+     * for a countdown instead of hiding calendar dates inside a long dialog. */
+    private void chooseQuickWhen(){
+        remember();
+        new AlertDialog.Builder(this)
+                .setTitle("When should this task be due?")
+                .setItems(new String[]{"Now · untimed","In… · stopwatch","Tomorrow · choose time","Pick date & time"},
+                        (dialog,index)->{
+                            if(index==0){
+                                quickDelaySeconds=0;quickDueAtMillis=0;
+                                quickAdvanceMinutes=0;render();
+                            }else if(index==1){
+                                StopwatchDelayPicker.show(this,quickDelaySeconds,seconds->{
+                                    quickDelaySeconds=seconds;quickDueAtMillis=0;render();
+                                });
+                            }else if(index==2){
+                                QuickDateTimePicker.tomorrow(this,millis->{
+                                    quickDueAtMillis=millis;quickDelaySeconds=0;render();
+                                });
+                            }else{
+                                QuickDateTimePicker.dateTime(this,millis->{
+                                    quickDueAtMillis=millis;quickDelaySeconds=0;render();
+                                });
+                            }
+                        }).setNegativeButton("Cancel",null).show();
+    }
+
+    private String quickAdvanceLabel(){
+        if(quickAdvanceMinutes==0)return "At task time";
+        if(quickAdvanceMinutes==60)return "1 hour earlier";
+        return quickAdvanceMinutes+" minutes earlier";
+    }
+
+    private String quickFormat(long timestamp){
+        return java.time.Instant.ofEpochMilli(timestamp)
+                .atZone(java.time.ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern(quickDelaySeconds%60!=0?
+                        "EEE d MMM, HH:mm:ss":"EEE d MMM, HH:mm"));
+    }
+
+    private void chooseQuickAdvance(){
+        remember();
+        final int[] amounts={0,5,10,15,30,60};
+        new AlertDialog.Builder(this)
+                .setTitle("When should the alarm ring?")
+                .setItems(new String[]{"At task time","5 minutes earlier","10 minutes earlier",
+                                "15 minutes earlier","30 minutes earlier","1 hour earlier",
+                                "Custom… · scroll or type"},
+                        (dialog,index)->{
+                            if(index==6){
+                                FlexibleTimePicker.advance(this,
+                                        quickAdvanceMinutes>0?quickAdvanceMinutes:15,minutes->{
+                                    quickAdvanceMinutes=minutes;
+                                    render();
+                                });
+                            }else{
+                                quickAdvanceMinutes=amounts[index];
+                                render();
+                            }
+                        }).setNegativeButton("Cancel",null).show();
+    }
+
     private void quickAdd(){
         String title=quickEntry.getText().toString().trim();if(title.isEmpty()){quickEntry.setError("Enter a task name");return;}
-        if(quickDueAtMillis>0 && quickDueAtMillis<=System.currentTimeMillis()){
-            toast("That date/time has passed. Please choose a future time.");
-            return;
-        }
-        boolean delayed=quickDelaySeconds>0||quickDueAtMillis>0;
+        long now=System.currentTimeMillis();
+        long target=QuickTaskTiming.dueAt(quickDelaySeconds,quickDueAtMillis,now);
+        try{QuickTaskTiming.validate(target,quickAdvanceMinutes,now);}
+        catch(IllegalArgumentException invalid){toast(invalid.getMessage());return;}
+        boolean delayed=target>0;
         TaskStore.Task task;
         if(!delayed) {
             try(TaskStore store=new TaskStore(this)){task=TaskSections.addPersonal(store,title);}
             TaskNotifications.show(this,task);
         } else {
-            long target=quickDueAtMillis>0?quickDueAtMillis:System.currentTimeMillis()+quickDelaySeconds*1000L;
             try(TaskStore store=new TaskStore(this)){
                 android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();db.beginTransaction();
                 try{
-                    task=store.add(title,1,target,TaskStore.REPEAT_NEVER,0);
+                    task=store.add(title,1,target,TaskStore.REPEAT_NEVER,quickAdvanceMinutes);
                     task=store.setGroup(task.id,"");
                     db.setTransactionSuccessful();
                 }finally{db.endTransaction();}
@@ -286,6 +355,7 @@ public final class ShiftActivity extends Activity {
         }
         quickDelaySeconds=0;
         quickDueAtMillis=0;
+        quickAdvanceMinutes=0;
         TaskWidget.refreshAll(this);quickDraft="";hideKeyboard();render();
         if(delayed)ReminderHealth.warnWhenBlocked(this);
     }
@@ -370,7 +440,7 @@ public final class ShiftActivity extends Activity {
         alarmSoundToggle();
         tool("Quick Add notification",TaskNotifications.quickAddEnabled(this)?"On · tap to change":"Off · optional notification shortcut",this::quickSettings);
         tool("Backup & restore","Export or restore your saved data",()->startActivity(new Intent(this,BackupActivity.class)));
-        text("PinTask 3.19",12);
+        text("PinTask 3.20",12);
     }
     private void watchSettings(){new AlertDialog.Builder(this).setTitle("Watch notifications").setMessage("For a paired Wear OS watch, allow PinTask notifications in Galaxy Wearable or your watch companion app. Open a task notification on the watch and tap Done. The phone must be connected. Swiping a card does not complete the task; it stays in PinTask and may reappear when the app refreshes.")
         .setPositiveButton("Phone + watch",(d,i)->{TaskNotifications.setWatchEnabled(this,true);render();}).setNeutralButton("Phone only, pinned",(d,i)->{TaskNotifications.setWatchEnabled(this,false);render();}).setNegativeButton("Cancel",null).show();}

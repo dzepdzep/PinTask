@@ -25,10 +25,20 @@ jobs:
         uses: android-actions/setup-android@v4
       - name: Install Android 36 platform
         run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0'
-      - name: Install Gradle 8.13
+      - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.13'
+      # GitHub's Gradle release asset can return HTTP 504. Use a separately
+      # hosted mirror of the same official distribution, but NEVER execute
+      # it unless its SHA-256 matches gradle.org's published checksum.
+      - name: Install verified Gradle 8.13
+        shell: bash
+        run: |
+          URL="https://mirrors.aliyun.com/gradle/distributions/v8.13.0/gradle-8.13-bin.zip"
+          ZIP="$RUNNER_TEMP/gradle-8.13-bin.zip"
+          curl --fail --location --silent --show-error --retry 3 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 240 "$URL" -o "$ZIP"
+          printf '%s  %s\n' '20f1b1176237254a6fc204d8434196fa11a4cfb387567519c61556e8710aed78' "$ZIP" | sha256sum --check -
+          unzip -q "$ZIP" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-8.13/bin" >> "$GITHUB_PATH"
       - name: Restore permanent signing key
         env:
           KEYSTORE_BASE64: ${{ secrets.PINTASK_KEYSTORE_BASE64 }}
